@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from app.core.db import get_session
 from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -25,9 +25,11 @@ async def create_document(
 
 @router.get("", response_model=list[DocumentRead])
 async def list_documents(
+    skip: int = Query(0, ge=0),           # 查询参数，默认值 + 校验(>=0)
+    limit: int = Query(20, ge=1, le=100), # 类似 Fastify 的 querystring schema
     session: AsyncSession = Depends(get_session),
 ) -> list[Document]:
-    result = await session.exec(select(Document).order_by(Document.created_at.desc()))
+    result = await session.exec(select(Document).order_by(Document.created_at.desc()).offset(skip).limit(limit))
     return result.all()
 
 
