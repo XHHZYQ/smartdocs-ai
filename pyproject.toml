@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "smartdocs-ai"
 version = "0.1.0"
@@ -11,6 +15,12 @@ dependencies = [
     "sqlmodel>=0.0.39",
     "uvicorn[standard]>=0.52.2",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[project.scripts]
+dev = "app.cli:dev"
 
 [dependency-groups]
 dev = [
