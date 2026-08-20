@@ -30,7 +30,9 @@ async def list_documents(
     session: AsyncSession = Depends(get_session),
 ) -> list[Document]:
     result = await session.exec(select(Document).order_by(Document.created_at.desc()).offset(skip).limit(limit))
-    return result.all()
+    docs = result.all()
+    # print('list_documents result', [doc.model_dump() for doc in docs]) # 通过 model_dump 转为 JSON 格式
+    return docs
 
 
 @router.get("/{document_id}", response_model=DocumentRead)
@@ -40,6 +42,7 @@ async def get_document(
 ) -> Document:
     doc = await session.get(Document, document_id)
     if doc is None:
+        print('get_document_id doc is None', document_id) 
         raise HTTPException(status_code=404, detail="Document not found")
     return doc
 

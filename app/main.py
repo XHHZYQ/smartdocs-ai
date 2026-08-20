@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.core.db import init_db
 from app.routers import documents
+from app.core.exceptions import register_exception_handlers
 
 
 @asynccontextmanager
@@ -13,7 +14,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
+register_exception_handlers(app)
 app.include_router(documents.router)
 
 
