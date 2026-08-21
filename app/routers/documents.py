@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.document import Document
+from app.core.response import EnvelopeRoute
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
 
 
 @router.post("", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
