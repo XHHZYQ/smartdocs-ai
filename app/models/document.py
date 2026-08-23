@@ -10,6 +10,7 @@ def utcnow() -> datetime:
 
 class Document(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", nullable=False, index=True)
     title: str = Field(max_length=255, nullable=False, index=True)
     content: str  # 先只存原始文本，不做切片/向量化
     created_at: datetime = Field(
