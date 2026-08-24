@@ -7,7 +7,8 @@ class Settings(BaseSettings):
     )
     jwt_secret_key: str = "dev-only-change-me"   # 生产环境务必用 .env 覆盖
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    # access_token_expire_minutes: int = 60 # 正式环境需恢复
+    access_token_expire_minutes: int = 60 * 24
     refresh_token_expire_days: int = 7
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

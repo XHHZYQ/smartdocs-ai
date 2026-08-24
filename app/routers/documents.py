@@ -29,6 +29,7 @@ async def create_document(
 
 
 # list_documents
+@router.get("", response_model=list[DocumentRead])
 async def list_documents(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
