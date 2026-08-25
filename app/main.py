@@ -17,7 +17,7 @@ app = FastAPI(lifespan=lifespan)
 register_exception_handlers(app)
 app.include_router(auth.router)
 app.include_router(documents.router)
-app.include_router(document_files.router) 
+app.include_router(document_files.router)
 
 
 @app.get("/")

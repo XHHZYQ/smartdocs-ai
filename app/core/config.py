@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb"
     )
-    jwt_secret_key: str = "dev-only-change-me"   # 生产环境务必用 .env 覆盖
+    jwt_secret_key: str = "dev-only-change-me"  # 生产环境务必用 .env 覆盖
     jwt_algorithm: str = "HS256"
     # access_token_expire_minutes: int = 60 # 正式环境需恢复
     access_token_expire_minutes: int = 60 * 24

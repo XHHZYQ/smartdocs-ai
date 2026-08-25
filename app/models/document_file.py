@@ -34,7 +34,9 @@ class DocumentFile(SQLModel, table=True):
     error_message: str | None = Field(default=None, nullable=True)
 
     # 解析成功后指向生成的 Document；解析失败或未开始时为 None
-    document_id: int | None = Field(default=None, foreign_key="document.id", nullable=True)
+    document_id: int | None = Field(
+        default=None, foreign_key="document.id", nullable=True
+    )
 
     uploaded_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

@@ -11,7 +11,9 @@ from starlette.concurrency import run_in_threadpool
 from app.models.document import Document
 from app.services.extraction import clean_text, extract_text
 
-router = APIRouter(prefix="/document-files", tags=["document-files"], route_class=EnvelopeRoute)
+router = APIRouter(
+    prefix="/document-files", tags=["document-files"], route_class=EnvelopeRoute
+)
 
 # content-type -> source_type 的粗筛映射，后续可以换成更严格的文件头校验
 _ALLOWED_CONTENT_TYPES: dict[str, SourceType] = {
@@ -21,9 +23,7 @@ _ALLOWED_CONTENT_TYPES: dict[str, SourceType] = {
 }
 
 
-@router.post(
-    "", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
 async def upload_document_file(
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),

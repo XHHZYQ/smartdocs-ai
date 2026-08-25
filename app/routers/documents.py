@@ -21,7 +21,9 @@ async def create_document(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> Document:
-    doc = Document(title=payload.title, content=payload.content, owner_id=current_user.id)
+    doc = Document(
+        title=payload.title, content=payload.content, owner_id=current_user.id
+    )
     session.add(doc)
     await session.commit()
     await session.refresh(doc)

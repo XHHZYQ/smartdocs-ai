@@ -5,7 +5,7 @@ from sqlmodel import SQLModel
 
 class DocumentCreate(SQLModel):
     title: str
-    content: str  
+    content: str
 
 
 class DocumentUpdate(SQLModel):

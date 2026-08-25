@@ -71,4 +71,6 @@ async def refresh(payload: RefreshRequest) -> AccessTokenResponse:
     if token_payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid token type")
 
-    return AccessTokenResponse(access_token=create_access_token(int(token_payload["sub"])))
+    return AccessTokenResponse(
+        access_token=create_access_token(int(token_payload["sub"]))
+    )

@@ -24,7 +24,9 @@ def _create_token(subject: str, expires_delta: timedelta, token_type: str) -> st
         "iat": now,
         "exp": now + expires_delta,
     }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(
+        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+    )
 
 
 def create_access_token(user_id: int) -> str:
@@ -45,4 +47,6 @@ def create_refresh_token(user_id: int) -> str:
 
 def decode_token(token: str) -> dict:
     # 过期 / 签名错误都会抛 jwt.InvalidTokenError（ExpiredSignatureError 是它的子类）
-    return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+    return jwt.decode(
+        token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+    )

@@ -12,8 +12,8 @@ class EnvelopeRoute(APIRoute):
         async def custom_handler(request: Request) -> Response:
             response = await original_handler(request)
             if response.headers.get("content-type", "").startswith("application/json"):
-                data = json.loads(response.body) # 解析 JSON 字符串为 Python 对象
-                body = json.dumps( # 将 Python 对象转换为 JSON 字符串
+                data = json.loads(response.body)  # 解析 JSON 字符串为 Python 对象
+                body = json.dumps(  # 将 Python 对象转换为 JSON 字符串
                     {"code": 0, "data": data, "msg": "ok"}
                 ).encode("utf-8")
                 response.body = body
