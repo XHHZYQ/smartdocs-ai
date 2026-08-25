@@ -15,6 +15,8 @@ from app.core.config import settings
 # 否则模型不会注册进 SQLModel.metadata，autogenerate 会检测不到表
 from app.models.document import Document  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.document_file import DocumentFile  # noqa: F401
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

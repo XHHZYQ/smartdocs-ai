@@ -11,7 +11,8 @@ engine = create_async_engine(settings.database_url, echo=True)
 
 async def init_db() -> None:
     async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+        # await conn.run_sync(SQLModel.metadata.create_all)
+        await conn.run_sync()
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:
