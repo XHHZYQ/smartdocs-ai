@@ -13,6 +13,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
+from app.core.response import EnvelopeRoute
 from app.schemas.user import (
     AccessTokenResponse,
     RefreshRequest,
@@ -21,7 +22,7 @@ from app.schemas.user import (
     UserRead,
 )
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"], route_class=EnvelopeRoute)
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)

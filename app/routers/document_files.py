@@ -4,8 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.models.document_file import DocumentFile, ExtractionStatus, SourceType
 from app.schemas.document_file import DocumentFileRead
+from app.core.response import EnvelopeRoute
 
-router = APIRouter(prefix="/document-files", tags=["document-files"])
+from starlette.concurrency import run_in_threadpool
+
+from app.models.document import Document
+from app.services.extraction import clean_text, extract_text
+
+router = APIRouter(prefix="/document-files", tags=["document-files"], route_class=EnvelopeRoute)
 
 # content-type -> source_type 的粗筛映射，后续可以换成更严格的文件头校验
 _ALLOWED_CONTENT_TYPES: dict[str, SourceType] = {
@@ -42,9 +48,26 @@ async def upload_document_file(
     await session.commit()
     await session.refresh(doc_file)
 
-    # TODO(下一步): 调用 run_in_threadpool 做文本提取 + 清洗
-    #   - 成功: 创建 Document，写回 doc_file.document_id，status = SUCCESS
-    #   - 失败: doc_file.error_message = str(e)，status = FAILED
-    #   这里先只落库 pending 状态，验证上传链路本身能跑通
+    try:
+        raw_text = await run_in_threadpool(extract_text, source_type, raw_bytes)
+        cleaned_text = clean_text(raw_text)
+
+        if not cleaned_text:
+            raise ValueError("Extracted text is empty")
+
+        document = Document(title=doc_file.original_filename, content=cleaned_text)
+        session.add(document)
+        await session.commit()
+        await session.refresh(document)
+
+        doc_file.document_id = document.id
+        doc_file.extraction_status = ExtractionStatus.SUCCESS
+    except Exception as e:
+        doc_file.extraction_status = ExtractionStatus.FAILED
+        doc_file.error_message = str(e)[:500]
+
+    session.add(doc_file)
+    await session.commit()
+    await session.refresh(doc_file)
 
     return doc_file
