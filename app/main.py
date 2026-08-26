@@ -9,7 +9,7 @@ from app.core.exceptions import register_exception_handlers
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    # await init_db() # 已使用 Alembic 进行数据库迁移, 不需要再初始化数据库
     yield
 
 
