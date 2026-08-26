@@ -10,6 +10,8 @@ from app.schemas.document_file import DocumentFileRead
 from app.core.response import EnvelopeRoute
 from app.core.deps import get_current_user
 from app.services.extraction import clean_text, extract_text
+from app.models.chunk import Chunk
+from app.services.chunking import chunk_text
 
 
 router = APIRouter(
@@ -47,9 +49,9 @@ async def upload_document_file(
         source_type=source_type,
         extraction_status=ExtractionStatus.PENDING,
     )
-    session.add(doc_file)
-    await session.commit()
-    await session.refresh(doc_file)
+    # session.add(doc_file)
+    # await session.commit()
+    # await session.refresh(doc_file)
 
     try:
         raw_text = await run_in_threadpool(extract_text, source_type, raw_bytes)
@@ -62,8 +64,23 @@ async def upload_document_file(
         session.add(document)
         await session.commit()
         await session.refresh(document)
+
+        document_id = document.id
+
+        chunks = chunk_text(cleaned_text)
+        chunk_records = [
+            Chunk(
+                document_id=document_id,
+                chunk_index=idx,
+                content=chunk,
+                char_count=len(chunk),
+            )
+            for idx, chunk in enumerate(chunks)
+        ]
+        session.add_all(chunk_records)
+        await session.commit()
         
-        doc_file.document_id = document.id
+        doc_file.document_id = document_id
         doc_file.extraction_status = ExtractionStatus.SUCCESS
     except Exception as e:
         await session.rollback()  # 回滚事务，确保数据库的一致性
