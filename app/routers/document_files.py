@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.core.db import get_session
+from app.models.user import User
+from app.models.document import Document
 from app.models.document_file import DocumentFile, ExtractionStatus, SourceType
 from app.schemas.document_file import DocumentFileRead
 from app.core.response import EnvelopeRoute
-
-from starlette.concurrency import run_in_threadpool
-
-from app.models.document import Document
+from app.core.deps import get_current_user
 from app.services.extraction import clean_text, extract_text
+
 
 router = APIRouter(
     prefix="/document-files", tags=["document-files"], route_class=EnvelopeRoute
@@ -26,6 +27,7 @@ _ALLOWED_CONTENT_TYPES: dict[str, SourceType] = {
 @router.post("", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
 async def upload_document_file(
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentFile:
     source_type = _ALLOWED_CONTENT_TYPES.get(file.content_type)
@@ -36,6 +38,7 @@ async def upload_document_file(
         )
 
     raw_bytes = await file.read()
+    owner_id = current_user.id  # 在任何 commit 之前，先把 id 取出来存成普通 int，解决 greenlet_spawn has not been called 报错
 
     doc_file = DocumentFile(
         original_filename=file.filename or "unknown",
@@ -55,14 +58,15 @@ async def upload_document_file(
         if not cleaned_text:
             raise ValueError("Extracted text is empty")
 
-        document = Document(title=doc_file.original_filename, content=cleaned_text)
+        document = Document(title=doc_file.original_filename, content=cleaned_text, owner_id=owner_id)
         session.add(document)
         await session.commit()
         await session.refresh(document)
-
+        
         doc_file.document_id = document.id
         doc_file.extraction_status = ExtractionStatus.SUCCESS
     except Exception as e:
+        await session.rollback()  # 回滚事务，确保数据库的一致性
         doc_file.extraction_status = ExtractionStatus.FAILED
         doc_file.error_message = str(e)[:500]
 
