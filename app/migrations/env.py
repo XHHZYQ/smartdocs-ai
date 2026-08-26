@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.models.document import Document  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.document_file import DocumentFile  # noqa: F401
+from app.models.chunk import Chunk  # noqa: F401
 
 
 # this is the Alembic Config object, which provides
