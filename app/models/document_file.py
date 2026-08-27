@@ -19,7 +19,9 @@ class ExtractionStatus(str, Enum):
     SUCCESS = "success"
     FAILED = "failed"
 
-
+# 文档文件表，记录上传的文件元数据，以及关联关系
+# 每个文件对应一个 DocumentFile 记录，记录文件的原始信息、内容类型、大小、来源类型等
+# 解析成功后，指向生成的 Document 记录；解析失败或未开始时为 None
 class DocumentFile(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
