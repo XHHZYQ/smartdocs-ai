@@ -63,7 +63,7 @@ async def upload_document_file(
 
         document = Document(title=doc_file.original_filename, content=cleaned_text, owner_id=owner_id)
         session.add(document)
-        await session.commit()
+        await session.flush()
         await session.refresh(document)
 
         document_id = document.id
