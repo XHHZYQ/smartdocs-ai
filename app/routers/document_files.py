@@ -12,6 +12,7 @@ from app.core.deps import get_current_user
 from app.services.extraction import clean_text, extract_text
 from app.models.chunk import Chunk
 from app.services.chunking import chunk_text
+from app.services.embedding import get_embeddings
 
 
 router = APIRouter(
@@ -68,14 +69,17 @@ async def upload_document_file(
         document_id = document.id
 
         chunks = chunk_text(cleaned_text)
+        embeddings = await get_embeddings(chunks)  # 新增：批量生成向量，和 chunks 顺序一一对应
+
         chunk_records = [
             Chunk(
                 document_id=document_id,
                 chunk_index=idx,
                 content=chunk,
                 char_count=len(chunk),
+                embedding=embedding
             )
-            for idx, chunk in enumerate(chunks)
+            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
         ]
         session.add_all(chunk_records)
         await session.commit()
