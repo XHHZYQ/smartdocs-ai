@@ -1,3 +1,30 @@
+import re
+
+_CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
+
+def _split_into_paragraphs(text: str) -> list[str]:
+    """段落切分：把代码块（```...```）当作不可再拆的整体，
+    避免代码块内部的空行被误判为段落分隔符，导致代码和说明文字被强行拆散。
+    """
+    paragraphs: list[str] = []
+    last_end = 0
+
+    for match in _CODE_BLOCK_PATTERN.finditer(text):
+        before = text[last_end : match.start()]
+        paragraphs.extend(p.strip() for p in before.split("\n\n") if p.strip())
+
+        code_block = match.group().strip()
+        if code_block:
+            paragraphs.append(code_block)
+
+        last_end = match.end()
+
+    tail = text[last_end:]
+    paragraphs.extend(p.strip() for p in tail.split("\n\n") if p.strip())
+
+    return paragraphs
+
+
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     """段落感知切块：优先按空行分段，贪心合并到接近 chunk_size；
     单个段落超长时才退化为字符滑动窗口。纯函数，不涉及 DB/IO。
@@ -5,7 +32,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
     if not text:
         return []
 
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    paragraphs = _split_into_paragraphs(text)
 
     chunks: list[str] = []
     buffer = ""
