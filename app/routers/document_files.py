@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
+import filetype 
 
 from app.core.db import get_session
 from app.models.user import User
@@ -26,6 +27,23 @@ _ALLOWED_CONTENT_TYPES: dict[str, SourceType] = {
     "text/plain": SourceType.MARKDOWN,  # 部分客户端把 .md 标成 text/plain
 }
 
+def _resolve_source_type(filename: str, raw_bytes: bytes) -> SourceType | None:
+    """内容嗅探优先，文件名后缀兜底。不再信任 content_type 请求头。"""
+    kind = filetype.guess(raw_bytes)
+    if kind is not None:
+        # 命中已知二进制格式的文件头特征，这是最可靠的判断依据
+        if kind.mime == "application/pdf":
+            return SourceType.PDF
+        return None  # 识别出是别的二进制格式（比如图片、zip），但不在支持范围，直接拒绝
+
+    # 没有命中任何已知二进制签名 —— 纯文本类文件（含 md/txt）天然都会走到这里
+    # 这一步没有"确定性"可言，只能靠文件名兜底
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext in {"md", "markdown", "txt"}:
+        return SourceType.MARKDOWN
+
+    return None
+
 
 @router.post("", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
 async def upload_document_file(
@@ -33,14 +51,14 @@ async def upload_document_file(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentFile:
-    source_type = _ALLOWED_CONTENT_TYPES.get(file.content_type)
+    raw_bytes = await file.read()
+    source_type = _resolve_source_type(file.filename or "", raw_bytes)
     if source_type is None:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported content type: {file.content_type}",
+            detail="Unsupported or unrecognized file type",
         )
 
-    raw_bytes = await file.read()
     owner_id = current_user.id  # 在任何 commit 之前，先把 id 取出来存成普通 int，解决 greenlet_spawn has not been called 报错
 
     doc_file = DocumentFile(
