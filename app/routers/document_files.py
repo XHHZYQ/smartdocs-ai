@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
+from sqlalchemy import func
+from sqlmodel import select
 import filetype 
 
 from app.core.db import get_session
 from app.models.user import User
 from app.models.document import Document
 from app.models.document_file import DocumentFile, ExtractionStatus, SourceType
-from app.schemas.document_file import DocumentFileRead
+from app.schemas.document_file import DocumentFileRead, DocumentFilePage
 from app.core.response import EnvelopeRoute
 from app.core.deps import get_current_user
 from app.services.extraction import clean_text, extract_text
@@ -45,6 +47,43 @@ def _resolve_source_type(filename: str, raw_bytes: bytes) -> SourceType | None:
     return None
 
 
+# 必须放在其他带路径参数的路由(比如以后有 /document-files/{id})之前,否则 FastAPI 会先匹配到路径参数路由
+@router.get("", response_model=DocumentFilePage)
+async def list_document_files(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: ExtractionStatus | None = Query(None),
+    q: str | None = Query(None, min_length=1, max_length=255),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> DocumentFilePage:
+    conditions = [DocumentFile.owner_id == current_user.id]
+
+    if status is not None:
+        conditions.append(DocumentFile.extraction_status == status)
+
+    if q:
+        conditions.append(DocumentFile.original_filename.ilike(f"%{q}%"))
+
+    # 总数:同一组 conditions 单独跑一次 count 查询
+    count_result = await session.exec(
+        select(func.count()).select_from(DocumentFile).where(*conditions)
+    )
+    total = count_result.one()
+
+    # 数据:按上传时间倒序，分页
+    result = await session.exec(
+        select(DocumentFile)
+        .where(*conditions)
+        .order_by(DocumentFile.uploaded_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    items = result.all()
+
+    return DocumentFilePage(items=items, total=total)   
+
+
 @router.post("", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
 async def upload_document_file(
     file: UploadFile = File(...),
@@ -67,6 +106,7 @@ async def upload_document_file(
         file_size_bytes=len(raw_bytes),
         source_type=source_type,
         extraction_status=ExtractionStatus.PENDING,
+        owner_id=owner_id
     )
     # session.add(doc_file)
     # await session.commit()

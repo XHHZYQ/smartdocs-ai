@@ -40,6 +40,8 @@ class DocumentFile(SQLModel, table=True):
         default=None, foreign_key="document.id", nullable=True
     )
 
+    # 记录上传者,用于列表接口按 owner 过滤
+    owner_id: int = Field(foreign_key="user.id", nullable=True, index=True)
     uploaded_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), nullable=False),
