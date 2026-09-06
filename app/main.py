@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.core.db import init_db
-from app.routers import auth, documents, document_files, search
+from app.routers import auth, documents, document_files, search, chat
 from app.core.exceptions import register_exception_handlers
 
 
@@ -19,6 +19,7 @@ app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(document_files.router)
 app.include_router(search.router)
+app.include_router(chat.router)
 
 
 @app.get("/")
