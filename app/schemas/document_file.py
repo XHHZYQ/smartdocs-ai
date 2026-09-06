@@ -20,3 +20,5 @@ class DocumentFileRead(SQLModel):
 class DocumentFilePage(SQLModel):
     items: list[DocumentFileRead]
     total: int
+    page: int
+    page_size: int

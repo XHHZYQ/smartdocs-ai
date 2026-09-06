@@ -50,13 +50,16 @@ def _resolve_source_type(filename: str, raw_bytes: bytes) -> SourceType | None:
 # 必须放在其他带路径参数的路由(比如以后有 /document-files/{id})之前,否则 FastAPI 会先匹配到路径参数路由
 @router.get("", response_model=DocumentFilePage)
 async def list_document_files(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
     status: ExtractionStatus | None = Query(None),
     q: str | None = Query(None, min_length=1, max_length=255),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentFilePage:
+    skip = (page - 1) * page_size  # 在函数内部换算，对外语义更直观
+    limit = page_size
+
     conditions = [DocumentFile.owner_id == current_user.id]
 
     if status is not None:
@@ -81,7 +84,7 @@ async def list_document_files(
     )
     items = result.all()
 
-    return DocumentFilePage(items=items, total=total)   
+    return DocumentFilePage(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
