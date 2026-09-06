@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     embedding_base_url: str = "https://api.siliconflow.cn/v1"
     embedding_model: str = "BAAI/bge-m3"
     embedding_dimensions: int = 1024
+    chat_model: str = "Qwen/Qwen2.5-7B-Instruct"
 
 
 settings = Settings()
