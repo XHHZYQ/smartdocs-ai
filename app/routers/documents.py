@@ -14,8 +14,8 @@ from app.models.user import User
 router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
 
 
-# create_document
-@router.post("", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
+# 创建文档
+@router.post("/create", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
 async def create_document(
     payload: DocumentCreate,
     session: AsyncSession = Depends(get_session),
@@ -30,25 +30,27 @@ async def create_document(
     return doc
 
 
-# list_documents
-@router.get("", response_model=list[DocumentRead])
+# 获取用户文档列表
+@router.get("/list", response_model=list[DocumentRead])
 async def list_documents(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=20),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[Document]:
+    offset = (page - 1) * page_size
     result = await session.exec(
         select(Document)
         .where(Document.owner_id == current_user.id)
         .order_by(Document.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+        .offset(offset)
+        .limit(page_size)
     )
     return result.all()
 
 
-@router.get("/{document_id}", response_model=DocumentRead)
+# 根据 id 获取文档
+@router.get("/detail/{document_id}", response_model=DocumentRead)
 async def get_document(
     document_id: int,
     session: AsyncSession = Depends(get_session),
@@ -60,7 +62,8 @@ async def get_document(
     return doc
 
 
-@router.patch("/{document_id}", response_model=DocumentRead)
+# 更新文档
+@router.patch("/update/{document_id}", response_model=DocumentRead)
 async def update_document(
     document_id: int,
     payload: DocumentUpdate,
@@ -81,11 +84,12 @@ async def update_document(
     await session.refresh(doc)
     return doc
 
-
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+# 删除文档
+@router.delete("/delete/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     document_id: int,
     session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> None:
     doc = await session.get(Document, document_id)
     if doc is None or doc.owner_id != current_user.id:

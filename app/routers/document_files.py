@@ -48,7 +48,8 @@ def _resolve_source_type(filename: str, raw_bytes: bytes) -> SourceType | None:
 
 
 # 必须放在其他带路径参数的路由(比如以后有 /document-files/{id})之前,否则 FastAPI 会先匹配到路径参数路由
-@router.get("", response_model=DocumentFilePage)
+# 获取用户文档文件列表
+@router.get("/list", response_model=DocumentFilePage)
 async def list_document_files(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
@@ -87,7 +88,11 @@ async def list_document_files(
     return DocumentFilePage(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
+# 上传文档文件
+#1. 记录上传文件的基本信息
+#4. 关联存储文档（Document）
+#5. 关联存储文档块（Chunk）
+@router.post("/upload", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
 async def upload_document_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),

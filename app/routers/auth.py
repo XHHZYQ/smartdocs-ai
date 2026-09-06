@@ -24,7 +24,7 @@ from app.schemas.user import (
 
 router = APIRouter(prefix="/auth", tags=["auth"], route_class=EnvelopeRoute)
 
-
+# 注册用户
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: UserCreate,
@@ -41,6 +41,7 @@ async def register(
     return user
 
 
+# 登录用户
 @router.post("/login", response_model=Token)
 async def login(
     # OAuth2PasswordRequestForm 字段名固定是 username/password，这里用 username 承载 email
@@ -61,7 +62,8 @@ async def login(
     )
 
 
-@router.post("/refresh", response_model=AccessTokenResponse)
+# 刷新访问令牌
+@router.post("/refresh/access_token", response_model=AccessTokenResponse)
 async def refresh(payload: RefreshRequest) -> AccessTokenResponse:
     try:
         token_payload = decode_token(payload.refresh_token)

@@ -13,8 +13,9 @@ from app.services.embedding import get_embeddings
 
 router = APIRouter(prefix="/search", tags=["search"], route_class=EnvelopeRoute)
 
-
-@router.post("", response_model=list[SearchResult])
+# 通过chunk搜索文档
+# 前端关键字转换为向量，再与数据库中的向量进行相似度计算，返回相似度最高的文档
+@router.post("/chunk", response_model=list[SearchResult])
 async def search_chunks(
     payload: SearchRequest,
     session: AsyncSession = Depends(get_session),
@@ -26,7 +27,7 @@ async def search_chunks(
     distance = Chunk.embedding.cosine_distance(query_vector).label("distance")
 
     result = await session.exec(
-        select(Chunk, Document.title, distance)
+        select(Chunk, Document.title, distance)  # 通过 distance 选择相似度最高的文档
         .join(Document, Chunk.document_id == Document.id)
         .where(Document.owner_id == current_user.id)
         .order_by(distance)
