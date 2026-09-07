@@ -1,13 +1,13 @@
 """临时验证脚本：确认 SiliconFlow embedding API 链路通、维度对"""
 import asyncio
 
-import httpx2
+import httpx
 
 from app.core.config import settings
 
 
 async def get_embeddings(texts: list[str]) -> list[list[float]]:
-    async with httpx2.AsyncClient(
+    async with httpx.AsyncClient(
         base_url=settings.embedding_base_url, timeout=30
     ) as client:
         response = await client.post(

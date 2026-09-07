@@ -1,4 +1,4 @@
-import httpx2
+import httpx
 
 from app.core.config import settings
 
@@ -8,7 +8,7 @@ async def get_embeddings(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    async with httpx2.AsyncClient(
+    async with httpx.AsyncClient(
         base_url=settings.embedding_base_url, timeout=30
     ) as client:
         response = await client.post(

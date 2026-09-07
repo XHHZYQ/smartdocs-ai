@@ -159,6 +159,7 @@
   <div class="answer" id="answer"></div>
 
   <script>
+    let activeController = null;   // 用于取消上一次未完成的请求
     const $ = (id) => document.getElementById(id);
     const endpointEl = $("endpoint");
     const tokenEl = $("token");
@@ -176,6 +177,14 @@
     async function sendChat() {
       const query = queryEl.value.trim();
       if (!query) return;
+
+      // 如果已有请求在进行中，先取消它，避免多路并发写同一个 DOM
+      if (activeController) {
+        activeController.abort();
+      }
+
+      const controller = new AbortController();
+      activeController = controller;
 
       const endpoint = endpointEl.value.trim();
       const token = tokenEl.value.trim();
@@ -195,6 +204,7 @@
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ query, top_k: topK }),
+          signal: controller.signal,   // 绑定可取消信号
         });
 
         if (!response.ok || !response.body) {
@@ -242,10 +252,18 @@
         setStatus("完成");
       } catch (err) {
         setStatus("出错: " + err.message, true);
+        if (err.name === "AbortError") {
+          return;   // 是被新请求取消的，不算错误，直接安静退出
+        }
+        setStatus("出错: " + err.message, true);
         if (fullText) {
           answerEl.textContent = fullText;
         }
       } finally {
+        if (activeController === controller) {   // 只有自己还是"当前活跃请求"时才复位状态
+          sendBtn.disabled = false;
+          activeController = null;
+        }
         sendBtn.disabled = false;
       }
     }
