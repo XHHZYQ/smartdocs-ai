@@ -20,8 +20,10 @@ async def _sse_event_stream(query: str, top_k: int, session: AsyncSession, owner
     """把检索 + LLM 流式调用串起来，逐帧产出标准 SSE 格式文本。"""
     rows = await retrieve_chunks(session, owner_id, query, top_k)
     chunks = [chunk.content for chunk, _title, _dist in rows]
+    print("retrieve_chunks chunks:", chunks)
 
     messages = build_messages(query, chunks)
+    print("build_messages messages:", messages)
 
     async for piece in stream_chat(messages):
         payload = json.dumps({"content": piece}, ensure_ascii=False)

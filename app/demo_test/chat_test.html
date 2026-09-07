@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>SmartDocs AI - 流式问答测试</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 16px;
+      background: #f5f5f7;
+      color: #1d1d1f;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .sub {
+      color: #86868b;
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+
+    .config {
+      background: #fff;
+      border: 1px solid #e5e5e7;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .config label {
+      display: block;
+      font-size: 12px;
+      color: #6e6e73;
+      margin: 10px 0 4px;
+    }
+
+    .config input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d2d2d7;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .row>div {
+      flex: 1;
+    }
+
+    .ask-box {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .ask-box input {
+      flex: 1;
+      padding: 12px 14px;
+      border: 1px solid #d2d2d7;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .ask-box button {
+      padding: 0 20px;
+      border: none;
+      border-radius: 8px;
+      background: #0071e3;
+      color: #fff;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .ask-box button:disabled {
+      background: #b0d4f7;
+      cursor: not-allowed;
+    }
+
+    .status {
+      font-size: 12px;
+      color: #86868b;
+      margin-bottom: 8px;
+      min-height: 16px;
+    }
+
+    .status.error {
+      color: #d70015;
+    }
+
+    .answer {
+      background: #fff;
+      border: 1px solid #e5e5e7;
+      border-radius: 10px;
+      padding: 16px;
+      min-height: 80px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: #0071e3;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-start infinite;
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>SmartDocs AI 流式问答测试</h1>
+  <div class="sub">POST /chat/complete，逐帧解析 SSE，拼接展示完整回答</div>
+
+  <div class="config">
+    <div class="row">
+      <div>
+        <label>接口地址</label>
+        <input id="endpoint" value="http://127.0.0.1:8000/chat/complete" />
+      </div>
+      <div>
+        <label>top_k</label>
+        <input id="topK" type="number" value="3" min="1" max="20" />
+      </div>
+    </div>
+    <label>Authorization (access_token，不用带 Bearer 前缀)</label>
+    <input id="token" placeholder="粘贴 /auth/login 返回的 access_token" />
+  </div>
+
+  <div class="ask-box">
+    <input id="query" placeholder="输入问题，回车或点击发送" />
+    <button id="sendBtn">发送</button>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="answer" id="answer"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const endpointEl = $("endpoint");
+    const tokenEl = $("token");
+    const topKEl = $("topK");
+    const queryEl = $("query");
+    const sendBtn = $("sendBtn");
+    const statusEl = $("status");
+    const answerEl = $("answer");
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.className = "status" + (isError ? " error" : "");
+    }
+
+    async function sendChat() {
+      const query = queryEl.value.trim();
+      if (!query) return;
+
+      const endpoint = endpointEl.value.trim();
+      const token = tokenEl.value.trim();
+      const topK = Number(topKEl.value) || 5;
+
+      sendBtn.disabled = true;
+      setStatus("请求中…");
+      answerEl.innerHTML = '<span class="cursor"></span>';
+
+      let fullText = "";
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ query, top_k: topK }),
+        });
+
+        if (!response.ok || !response.body) {
+          const errText = await response.text().catch(() => "");
+          throw new Error(`HTTP ${response.status} ${errText}`);
+        }
+
+        setStatus("接收中…");
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          // 网络分片和 SSE 帧边界不一定对齐，用 buffer 累积后按 \n\n 切分
+          buffer += decoder.decode(value, { stream: true });
+
+          const frames = buffer.split("\n\n");
+          buffer = frames.pop(); // 最后一段可能不完整，留到下一轮再拼
+
+          for (const frame of frames) {
+            const line = frame.trim();
+            if (!line.startsWith("data:")) continue;
+
+            const payload = line.slice("data:".length).trim();
+            if (payload === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed.content) {
+                fullText += parsed.content;
+                answerEl.innerHTML =
+                  escapeHtml(fullText) + '<span class="cursor"></span>';
+              }
+            } catch (e) {
+              console.warn("解析帧失败，跳过:", payload, e);
+            }
+          }
+        }
+
+        answerEl.textContent = fullText || "(未收到内容)";
+        setStatus("完成");
+      } catch (err) {
+        setStatus("出错: " + err.message, true);
+        if (fullText) {
+          answerEl.textContent = fullText;
+        }
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    sendBtn.addEventListener("click", sendChat);
+    queryEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendChat();
+    });
+  </script>
+
+</body>
+
+</html>
