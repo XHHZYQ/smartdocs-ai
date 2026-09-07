@@ -9,7 +9,7 @@ from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.user import User
 from app.schemas.search import SearchRequest, SearchResult
-from app.services.embedding import get_embeddings
+from app.services.retrieval import retrieve_chunks
 
 router = APIRouter(prefix="/search", tags=["search"], route_class=EnvelopeRoute)
 
@@ -21,19 +21,9 @@ async def search_chunks(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[SearchResult]:
-    query_embeddings = await get_embeddings([payload.query])
-    query_vector = query_embeddings[0]
-
-    distance = Chunk.embedding.cosine_distance(query_vector).label("distance")
-
-    result = await session.exec(
-        select(Chunk, Document.title, distance)  # 通过 distance 选择相似度最高的文档
-        .join(Document, Chunk.document_id == Document.id)
-        .where(Document.owner_id == current_user.id)
-        .order_by(distance)
-        .limit(payload.top_k)
+    all_columns = await retrieve_chunks(
+        session, current_user.id, payload.query, payload.top_k
     )
-    allColumns = result.all()
 
     return [
         SearchResult(
@@ -43,5 +33,5 @@ async def search_chunks(
             content=chunk.content,
             distance=dist,
         )
-        for chunk, title, dist in allColumns
+        for chunk, title, dist in all_columns
     ]
