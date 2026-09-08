@@ -237,7 +237,9 @@
 
             try {
               const parsed = JSON.parse(payload);
-              if (parsed.content) {
+              if (parsed.error) {
+                setStatus("出错: " + parsed.error, true);   // 新增：识别 error 字段，用状态栏提示而不是拼进正文
+              } else if (parsed.content) {
                 fullText += parsed.content;
                 answerEl.innerHTML =
                   escapeHtml(fullText) + '<span class="cursor"></span>';
