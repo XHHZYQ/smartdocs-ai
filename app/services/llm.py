@@ -12,7 +12,8 @@ async def stream_chat(messages: list[dict[str, str]]) -> AsyncGenerator[str, Non
     调用方用 `async for text in stream_chat(...)` 消费，而不是 await 一次性拿结果。
     """
     async with httpx.AsyncClient(
-        base_url=settings.embedding_base_url, timeout=60
+        base_url=settings.embedding_base_url,
+        timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0),
     ) as client:
         async with client.stream(
             "POST",
@@ -33,13 +34,17 @@ async def stream_chat(messages: list[dict[str, str]]) -> AsyncGenerator[str, Non
                 while "\n" in buffer:
                     line, buffer = buffer.split("\n", 1)
                     line = line.strip()
-                    if not line or not line.startswith("data: "):
+                    if not line or not line.startswith("data:"):
                         continue
-                    payload = line[len("data: "):]
+                    # 兼容 "data: " 和 "data:" 两种格式
+                    payload = line[len("data:"):].lstrip()
                     if payload == "[DONE]":
                         continue
-                    chunk = json.loads(payload)
-                    delta = chunk["choices"][0]["delta"].get("content")
-                    print("原始 delta:", repr(delta))  # 临时调试，确认问题就出在这里
+                    try:
+                        chunk = json.loads(payload)
+                        delta = chunk["choices"][0]["delta"].get("content")
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        # 跳过解析失败的帧，避免整条流中断
+                        continue
                     if delta:
                         yield delta
