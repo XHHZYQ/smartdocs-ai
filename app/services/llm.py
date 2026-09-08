@@ -51,9 +51,9 @@ async def stream_chat(messages: list[dict[str, str]]) -> AsyncGenerator[str, Non
                     while "\n" in buffer:
                         line, buffer = buffer.split("\n", 1)
                         line = line.strip()
-                        if not line or not line.startswith("data: "):
+                        if not line or not line.startswith("data:"):
                             continue
-                        payload = line[len("data: "):]
+                        payload = line[len("data:"):].lstrip()
                         if payload == "[DONE]":
                             continue
                         chunk = json.loads(payload)
