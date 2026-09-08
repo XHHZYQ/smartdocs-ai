@@ -21,6 +21,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Conversation-Id"],  # 让前端 fetch 能读到这个响应头
 )
 register_exception_handlers(app)
 app.include_router(auth.router)
