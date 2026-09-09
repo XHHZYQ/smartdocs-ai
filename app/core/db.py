@@ -17,3 +17,10 @@ async def init_db() -> None:
 async def get_session() -> AsyncGenerator[AsyncSession]:
     async with SQLModelAsyncSession(engine) as session:
         yield session
+
+
+def new_session() -> SQLModelAsyncSession:
+    """给需要脱离 FastAPI 请求生命周期、自行管理 session 的场景用(比如 SSE 生成器)。
+    用法: async with new_session() as session: ...
+    """
+    return SQLModelAsyncSession(engine)

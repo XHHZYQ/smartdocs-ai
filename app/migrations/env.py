@@ -17,6 +17,9 @@ from app.models.document import Document  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.document_file import DocumentFile  # noqa: F401
 from app.models.chunk import Chunk  # noqa: F401
+from app.models.message import Message  # noqa: F401
+from app.models.conversation import Conversation  # noqa: F401
+
 
 
 # this is the Alembic Config object, which provides
