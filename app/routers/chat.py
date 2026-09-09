@@ -66,7 +66,8 @@ async def _sse_event_stream(
         rows = await retrieve_chunks(session, owner_id, query, top_k)
         chunks = [chunk.content for chunk, _title, _dist in rows]
 
-        messages = build_messages(query, chunks, history)
+        # messages = build_messages(query, chunks, history)
+        messages = build_messages(query, chunks)  # todo: 后续再优化，这里先不考虑历史消息
 
         full_reply = ""
         async for piece in stream_chat(messages):
@@ -92,8 +93,9 @@ async def chat(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
+    user_id = current_user.id
     conversation = await _get_or_create_conversation(
-        session, current_user.id, payload.conversation_id
+        session, user_id, payload.conversation_id
     )
     conversation_id = conversation.id  # commit 前先取出普通 int，避免过期对象访问报错
 
@@ -107,7 +109,7 @@ async def chat(
 
     return StreamingResponse(
         _sse_event_stream(
-            payload.query, payload.top_k, current_user.id, conversation_id, history
+            payload.query, payload.top_k, user_id, conversation_id, history
         ),
         media_type="text/event-stream",
         headers={"X-Conversation-Id": str(conversation_id)},
