@@ -156,6 +156,7 @@ async def upload_document_file(
         await session.rollback()  # 回滚事务，确保数据库的一致性
         doc_file.extraction_status = ExtractionStatus.FAILED
         doc_file.error_message = str(e)[:500]
+        logger.exception(f"文件处理失败: {e}")
 
     session.add(doc_file)
     await session.commit()

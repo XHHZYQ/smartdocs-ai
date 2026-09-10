@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    debug: bool = True  # 生产环境用 .env 覆盖为 False
     database_url: str = (
         "postgresql+asyncpg://smartdocs:smartdocs@localhost:5433/smartdocsdb"  # windows
         # "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb"  # mac
