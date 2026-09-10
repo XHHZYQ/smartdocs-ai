@@ -66,8 +66,7 @@ async def _sse_event_stream(
         rows = await retrieve_chunks(session, owner_id, query, top_k)
         chunks = [chunk.content for chunk, _title, _dist in rows]
 
-        # messages = build_messages(query, chunks, history)
-        messages = build_messages(query, chunks)  # todo: 后续再优化，这里先不考虑历史消息
+        messages = build_messages(query, chunks, history)
 
         full_reply = ""
         async for piece in stream_chat(messages):
