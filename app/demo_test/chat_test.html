@@ -160,6 +160,7 @@
 
   <script>
     let activeController = null;   // 用于取消上一次未完成的请求
+    let conversationId = null;    // 保存后端返回的会话 ID，下次请求带上以延续会话
     const $ = (id) => document.getElementById(id);
     const endpointEl = $("endpoint");
     const tokenEl = $("token");
@@ -203,9 +204,17 @@
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ query, top_k: topK }),
+          body: JSON.stringify({
+            query,
+            top_k: topK,
+            ...(conversationId ? { conversation_id: Number(conversationId) } : {}),
+          }),
           signal: controller.signal,   // 绑定可取消信号
         });
+
+        // 后端通过 X-Conversation-Id 响应头返回会话 ID，存起来供后续请求延续会话
+        const headerConvId = response.headers.get("X-Conversation-Id");
+        if (headerConvId) conversationId = headerConvId;
 
         if (!response.ok || !response.body) {
           const errText = await response.text().catch(() => "");
