@@ -8,6 +8,7 @@ from app.core.config import settings
 # 文档分块表，记录文档的分块内容和元数据，以及关联关系
 class Chunk(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenant.id", nullable=False, index=True)
     document_id: int = Field(foreign_key="document.id", nullable=False, index=True)
     chunk_index: int = Field(nullable=False)  # 在文档内的顺序，0-based
     content: str = Field(nullable=False)

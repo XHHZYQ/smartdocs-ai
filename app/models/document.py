@@ -11,6 +11,7 @@ def utcnow() -> datetime:
 class Document(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     owner_id: int = Field(foreign_key="user.id", nullable=False, index=True)
+    tenant_id: int = Field(foreign_key="tenant.id", nullable=False, index=True)
     title: str = Field(max_length=255, nullable=False, index=True)
     content: str
     created_at: datetime = Field(

@@ -14,6 +14,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.core.response import EnvelopeRoute
+from app.models.tenant import TenantMembership
 from app.schemas.user import (
     AccessTokenResponse,
     RefreshRequest,
@@ -56,8 +57,18 @@ async def login(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    memberships = (
+        await session.exec(
+            select(TenantMembership).where(TenantMembership.user_id == user.id)
+        )
+    ).all()
+    # 只有唯一归属的租户时才自动代入 token;0 个或多个都留给前端走 /tenants/select
+    tenant_id = memberships[0].tenant_id if len(memberships) == 1 else None
+    role = memberships[0].role.value if len(memberships) == 1 else None
+
     return Token(
-        access_token=create_access_token(user.id),
+        access_token=create_access_token(user.id, tenant_id=tenant_id, role=role),
         refresh_token=create_refresh_token(user.id),
     )
 

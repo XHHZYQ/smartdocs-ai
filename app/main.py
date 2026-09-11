@@ -6,7 +6,7 @@ from loguru import logger
 from fastapi.middleware.cors import CORSMiddleware
 
 # from app.core.db import init_db
-from app.routers import auth, documents, document_files, search, chat
+from app.routers import auth, documents, document_files, search, chat, tenant
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
 
@@ -44,6 +44,7 @@ app.include_router(documents.router)
 app.include_router(document_files.router)
 app.include_router(search.router)
 app.include_router(chat.router)
+app.include_router(tenant.router)
 
 
 @app.get("/")
