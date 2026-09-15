@@ -15,7 +15,7 @@ router = APIRouter(prefix="/tenants", tags=["tenants"], route_class=EnvelopeRout
 
 
 # 创建租户:当前用户自动成为 owner
-# 用 get_current_user(只校验身份)而非租户上下文——
+# 用 get_current_user(只校验身份)而不是 get_current_tenant_user(校验租户)—
 # 因为"创建租户"本来就是还没有租户时要做的事
 @router.post("/create", response_model=TenantRead, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
