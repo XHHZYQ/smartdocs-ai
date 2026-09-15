@@ -19,6 +19,7 @@ from app.models.document_file import DocumentFile  # noqa: F401
 from app.models.chunk import Chunk  # noqa: F401
 from app.models.message import Message  # noqa: F401
 from app.models.conversation import Conversation  # noqa: F401
+from app.models.tenant import Tenant  # noqa: F401
 
 
 
