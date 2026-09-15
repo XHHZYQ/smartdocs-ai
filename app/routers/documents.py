@@ -10,6 +10,8 @@ from app.models.document import Document
 from app.core.response import EnvelopeRoute
 from app.core.deps import get_current_user
 from app.models.user import User
+from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
+from app.models.tenant import TenantRole
 
 router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
 
@@ -20,9 +22,13 @@ async def create_document(
     payload: DocumentCreate,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(require_role(TenantRole.MEMBER)),
 ) -> Document:
     doc = Document(
-        title=payload.title, content=payload.content, owner_id=current_user.id
+        title=payload.title,
+        content=payload.content,
+        owner_id=current_user.id,
+        tenant_id=tenant_ctx.tenant_id
     )
     session.add(doc)
     await session.commit()
@@ -36,12 +42,12 @@ async def list_documents(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=20),
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
 ) -> list[Document]:
     offset = (page - 1) * page_size
     result = await session.exec(
         select(Document)
-        .where(Document.owner_id == current_user.id)
+        .where(Document.tenant_id == tenant_ctx.tenant_id)
         .order_by(Document.created_at.desc())
         .offset(offset)
         .limit(page_size)
@@ -54,10 +60,10 @@ async def list_documents(
 async def get_document(
     document_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
 ) -> Document:
     doc = await session.get(Document, document_id)
-    if doc is None or doc.owner_id != current_user.id:
+    if doc is None or doc.tenant_id != tenant_ctx.tenant_id:
         raise HTTPException(status_code=404, detail="Document not found")
     return doc
 

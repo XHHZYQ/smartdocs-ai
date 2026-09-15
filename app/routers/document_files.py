@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import func
 from sqlmodel import select
-import filetype 
+import filetype
+from loguru import logger
 
 from app.core.db import get_session
 from app.models.user import User
@@ -11,11 +12,12 @@ from app.models.document import Document
 from app.models.document_file import DocumentFile, ExtractionStatus, SourceType
 from app.schemas.document_file import DocumentFileRead, DocumentFilePage
 from app.core.response import EnvelopeRoute
-from app.core.deps import get_current_user
 from app.services.extraction import clean_text, extract_text
 from app.models.chunk import Chunk
 from app.services.chunking import chunk_text
 from app.services.embedding import get_embeddings
+from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
+from app.models.tenant import TenantRole
 
 
 router = APIRouter(
@@ -55,13 +57,13 @@ async def list_document_files(
     page_size: int = Query(10, ge=1, le=50),
     status: ExtractionStatus | None = Query(None),
     q: str | None = Query(None, min_length=1, max_length=255),
-    current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentFilePage:
     skip = (page - 1) * page_size  # 在函数内部换算，对外语义更直观
     limit = page_size
 
-    conditions = [DocumentFile.owner_id == current_user.id]
+    conditions = [DocumentFile.tenant_id == tenant_ctx.tenant_id]
 
     if status is not None:
         conditions.append(DocumentFile.extraction_status == status)
@@ -96,6 +98,7 @@ async def list_document_files(
 async def upload_document_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(require_role(TenantRole.MEMBER)),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentFile:
     raw_bytes = await file.read()
@@ -107,6 +110,7 @@ async def upload_document_file(
         )
 
     owner_id = current_user.id  # 在任何 commit 之前，先把 id 取出来存成普通 int，解决 greenlet_spawn has not been called 报错
+    tenant_id = tenant_ctx.tenant_id
 
     doc_file = DocumentFile(
         original_filename=file.filename or "unknown",
@@ -114,7 +118,8 @@ async def upload_document_file(
         file_size_bytes=len(raw_bytes),
         source_type=source_type,
         extraction_status=ExtractionStatus.PENDING,
-        owner_id=owner_id
+        owner_id=owner_id,
+        tenant_id=tenant_id,
     )
     # session.add(doc_file)
     # await session.commit()
@@ -127,7 +132,12 @@ async def upload_document_file(
         if not cleaned_text:
             raise ValueError("Extracted text is empty")
 
-        document = Document(title=doc_file.original_filename, content=cleaned_text, owner_id=owner_id)
+        document = Document(
+            title=doc_file.original_filename,
+            content=cleaned_text,
+            owner_id=owner_id,
+            tenant_id=tenant_id,
+        )
         session.add(document)
         await session.flush()
         await session.refresh(document)
@@ -139,11 +149,12 @@ async def upload_document_file(
 
         chunk_records = [
             Chunk(
+                tenant_id=tenant_id,
                 document_id=document_id,
                 chunk_index=idx,
                 content=chunk,
                 char_count=len(chunk),
-                embedding=embedding
+                embedding=embedding,
             )
             for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
         ]

@@ -18,20 +18,23 @@ from app.schemas.message import MessageRead
 from app.services.llm import stream_chat
 from app.services.prompt import build_messages
 from app.services.retrieval import retrieve_chunks
+from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
+from app.models.tenant import TenantRole
 
 router = APIRouter(prefix="/chat", tags=["chat"], route_class=EnvelopeRoute)
 
 
 async def _get_or_create_conversation(
-    session: AsyncSession, owner_id: int, conversation_id: int | None
+    session: AsyncSession, owner_id: int, conversation_id: int | None,
+    tenant_id: int = Depends(get_tenant_context),
 ) -> Conversation:
     if conversation_id is not None:
         conv = await session.get(Conversation, conversation_id)
-        if conv is None or conv.owner_id != owner_id:
+        if conv is None or conv.tenant_id != tenant_id:
             raise HTTPException(status_code=404, detail="Conversation not found")
         return conv
 
-    conv = Conversation(owner_id=owner_id)
+    conv = Conversation(owner_id=owner_id, tenant_id=tenant_id)
     session.add(conv)
     await session.commit()
     await session.refresh(conv)
@@ -53,7 +56,7 @@ async def _load_history(session: AsyncSession, conversation_id: int) -> list[dic
 async def _sse_event_stream(
     query: str,
     top_k: int,
-    owner_id: int,
+    tenant_id: int,
     conversation_id: int,
     history: list[dict[str, str]],
 ):
@@ -63,7 +66,7 @@ async def _sse_event_stream(
     所以必须自己开一个独立生命周期的 session。
     """
     async with new_session() as session:
-        rows = await retrieve_chunks(session, owner_id, query, top_k)
+        rows = await retrieve_chunks(session, tenant_id, query, top_k)
         chunks = [chunk.content for chunk, _title, _dist in rows]
 
         messages = build_messages(query, chunks, history)
@@ -75,7 +78,12 @@ async def _sse_event_stream(
             yield f"data: {payload}\n\n"
 
         session.add(
-            Message(conversation_id=conversation_id, role=MessageRole.ASSISTANT, content=full_reply)
+            Message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                role=MessageRole.ASSISTANT,
+                content=full_reply,
+            )
         )
         conversation = await session.get(Conversation, conversation_id)
         if conversation is not None:
@@ -91,25 +99,29 @@ async def chat(
     payload: ChatRequest,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(require_role(TenantRole.MEMBER)),
 ) -> StreamingResponse:
     user_id = current_user.id
+    tenant_id = tenant_ctx.tenant_id
     conversation = await _get_or_create_conversation(
-        session, user_id, payload.conversation_id
+        session, user_id, tenant_id, payload.conversation_id
     )
-    conversation_id = conversation.id  # commit 前先取出普通 int，避免过期对象访问报错
+    conversation_id = conversation.id
 
     history = await _load_history(session, conversation_id)
 
-    # 用户消息先落库：即便生成阶段报错，至少这条提问留了记录
     session.add(
-        Message(conversation_id=conversation_id, role=MessageRole.USER, content=payload.query)
+        Message(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            role=MessageRole.USER,
+            content=payload.query,
+        )
     )
     await session.commit()
 
     return StreamingResponse(
-        _sse_event_stream(
-            payload.query, payload.top_k, user_id, conversation_id, history
-        ),
+        _sse_event_stream(payload.query, payload.top_k, tenant_id, conversation_id, history),
         media_type="text/event-stream",
         headers={"X-Conversation-Id": str(conversation_id)},
     )
@@ -120,10 +132,10 @@ async def chat(
 async def get_history(
     conversation_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
 ) -> list[MessageRead]:
     conv = await session.get(Conversation, conversation_id)
-    if conv is None or conv.owner_id != current_user.id:
+    if conv is None or conv.tenant_id != tenant_ctx.tenant_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     result = await session.exec(

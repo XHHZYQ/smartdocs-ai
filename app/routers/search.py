@@ -10,6 +10,7 @@ from app.models.document import Document
 from app.models.user import User
 from app.schemas.search import SearchRequest, SearchResult
 from app.services.retrieval import retrieve_chunks
+from app.core.deps import get_tenant_context, TenantContext
 
 router = APIRouter(prefix="/search", tags=["search"], route_class=EnvelopeRoute)
 
@@ -19,10 +20,10 @@ router = APIRouter(prefix="/search", tags=["search"], route_class=EnvelopeRoute)
 async def search_chunks(
     payload: SearchRequest,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
 ) -> list[SearchResult]:
     all_columns = await retrieve_chunks(
-        session, current_user.id, payload.query, payload.top_k
+        session, tenant_ctx.tenant_id, payload.query, payload.top_k
     )
 
     return [
