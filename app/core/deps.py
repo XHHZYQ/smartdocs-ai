@@ -1,8 +1,9 @@
+from dataclasses import dataclass
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
-from dataclasses import dataclass
 
 from app.core.db import get_session
 from app.core.security import decode_token
@@ -11,6 +12,7 @@ from app.models.user import User
 from app.models.tenant import TenantRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
 
 @dataclass
 class TenantContext:
@@ -74,6 +76,7 @@ def require_role(min_role: TenantRole):
     """Router 层粗粒度角色校验:要求当前租户角色 >= min_role。
     用法: Depends(require_role(TenantRole.MEMBER))
     """
+
     async def checker(
         ctx: TenantContext = Depends(get_tenant_context),
     ) -> TenantContext:
