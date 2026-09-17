@@ -25,3 +25,4 @@ class AccessTokenResponse(SQLModel):
 
 class RefreshRequest(SQLModel):
     refresh_token: str
+    tid: int | None = None

@@ -14,7 +14,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.core.response import EnvelopeRoute
-from app.models.tenant import TenantMembership
+from app.models.tenant import TenantMembership, TenantRole
 from app.schemas.user import (
     AccessTokenResponse,
     RefreshRequest,
@@ -75,7 +75,10 @@ async def login(
 
 # 刷新访问令牌
 @router.post("/refresh/access_token", response_model=AccessTokenResponse)
-async def refresh(payload: RefreshRequest) -> AccessTokenResponse:
+async def refresh(
+    payload: RefreshRequest,
+    session: AsyncSession = Depends(get_session),
+) -> AccessTokenResponse:
     try:
         token_payload = decode_token(payload.refresh_token)
     except InvalidTokenError:
@@ -84,6 +87,23 @@ async def refresh(payload: RefreshRequest) -> AccessTokenResponse:
     if token_payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid token type")
 
+    user_id = int(token_payload["sub"])
+
+    tenant_id = None
+    role = None
+    if payload.tid is not None:
+        result = await session.exec(
+            select(TenantMembership).where(
+                TenantMembership.user_id == user_id,
+                TenantMembership.tenant_id == payload.tid,
+            )
+        )
+        membership = result.first()
+        if membership is None:
+            raise HTTPException(status_code=403, detail="Not a member of this tenant")
+        tenant_id = membership.tenant_id
+        role = membership.role.value
+
     return AccessTokenResponse(
-        access_token=create_access_token(int(token_payload["sub"]))
+        access_token=create_access_token(user_id, tenant_id=tenant_id, role=role)
     )
