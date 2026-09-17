@@ -104,7 +104,7 @@ async def chat(
     user_id = current_user.id
     tenant_id = tenant_ctx.tenant_id
     conversation = await _get_or_create_conversation(
-        session, user_id, tenant_id, payload.conversation_id
+        session=session, owner_id=user_id, conversation_id=payload.conversation_id, tenant_id=tenant_id
     )
     conversation_id = conversation.id
 
