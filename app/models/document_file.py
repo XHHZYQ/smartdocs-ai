@@ -37,7 +37,13 @@ class DocumentFile(SQLModel, table=True):
 
     # 解析成功后指向生成的 Document；解析失败或未开始时为 None
     document_id: int | None = Field(
-        default=None, foreign_key="document.id", nullable=True
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("document.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
     )
 
     # 记录上传者,用于列表接口按 owner 过滤

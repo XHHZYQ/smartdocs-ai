@@ -100,5 +100,18 @@ async def delete_document(
     doc = await session.get(Document, document_id)
     if doc is None or doc.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Document not found")
+    # 1. 显式删除关联 Chunk
+    await session.exec(delete(Chunk).where(Chunk.document_id == document_id))
+
+    # 2. DocumentFile 只断开关联
+    await session.exec(
+        update(DocumentFile)
+        .where(DocumentFile.document_id == document_id)
+        .values(document_id=None)
+    )
+
+    # 3. 删除文档本身
+    # 以后软删除：改成 doc.deleted_at = ...; session.add(doc)
+    # 以后审计：在这里插 AuditLog(before=snapshot, action="document.delete")
     await session.delete(doc)
     await session.commit()

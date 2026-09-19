@@ -9,7 +9,14 @@ from app.core.config import settings
 class Chunk(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     tenant_id: int = Field(foreign_key="tenant.id", nullable=False, index=True)
-    document_id: int = Field(foreign_key="document.id", nullable=False, index=True)
+    document_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("document.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
     chunk_index: int = Field(nullable=False)  # 在文档内的顺序，0-based
     content: str = Field(nullable=False)
     char_count: int = Field(nullable=False)  # 后续排查向量检索问题时有用
