@@ -12,8 +12,39 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
 from app.models.tenant import TenantRole
+from app.services.extraction import clean_text
+from app.services.chunking import chunk_text
+from app.services.embedding import get_embeddings
 
 router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
+
+async def _rebuild_chunks(
+    session: AsyncSession,
+    *,
+    document_id: int,
+    tenant_id: int,
+    cleaned_text: str,
+) -> None:
+    """删除旧 Chunk，按清洗后的文本重新切块 + 向量化并写入。"""
+    await session.exec(delete(Chunk).where(Chunk.document_id == document_id))
+
+    chunks = chunk_text(cleaned_text)
+    if not chunks:
+        return
+
+    embeddings = await get_embeddings(chunks)
+    chunk_records = [
+        Chunk(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            chunk_index=idx,
+            content=chunk,
+            char_count=len(chunk),
+            embedding=embedding,
+        )
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+    ]
+    session.add_all(chunk_records)
 
 
 # 创建文档
@@ -24,13 +55,26 @@ async def create_document(
     current_user: User = Depends(get_current_user),
     tenant_ctx: TenantContext = Depends(require_role(TenantRole.MEMBER)),
 ) -> Document:
+    cleaned = clean_text(payload.content)
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Document content is empty after cleaning")
+
     doc = Document(
         title=payload.title,
-        content=payload.content,
+        content=cleaned,
         owner_id=current_user.id,
-        tenant_id=tenant_ctx.tenant_id
+        tenant_id=tenant_ctx.tenant_id,
     )
     session.add(doc)
+    await session.flush()          # 拿到 doc.id，还没 commit
+    await session.refresh(doc)
+
+    await _rebuild_chunks(
+        session,
+        document_id=doc.id,
+        tenant_id=tenant_ctx.tenant_id,
+        cleaned_text=cleaned,
+    )
     await session.commit()
     await session.refresh(doc)
     return doc
@@ -81,11 +125,29 @@ async def update_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     updates = payload.model_dump(exclude_unset=True)
+    content_changed = "content" in updates
+
+    if content_changed:
+        cleaned = clean_text(updates["content"] or "")
+        if not cleaned:
+            raise HTTPException(status_code=400, detail="Document content is empty after cleaning")
+        updates["content"] = cleaned
+
     for field, value in updates.items():
         setattr(doc, field, value)
     doc.updated_at = datetime.now(UTC)
 
     session.add(doc)
+
+    # 只有正文变了才重建 Chunk；只改 title 不动向量库
+    if content_changed:
+        await _rebuild_chunks(
+            session,
+            document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            cleaned_text=doc.content,
+        )
+
     await session.commit()
     await session.refresh(doc)
     return doc
