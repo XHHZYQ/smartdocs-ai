@@ -9,13 +9,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, documents, document_files, search, chat, tenant
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
+from app.core.redis import init_redis, close_redis
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    # await init_db() # 已使用 Alembic 进行数据库迁移, 不需要再初始化数据库
+    # await init_db()  # 已使用 Alembic，保持注释
+
+    # ===== 启动时连 Redis =====
+    await init_redis()
+
     yield
+
+    # ===== 关闭时断开 Redis =====
+    await close_redis()
 
 
 app = FastAPI(lifespan=lifespan)

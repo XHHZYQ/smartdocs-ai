@@ -4,8 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     debug: bool = True  # 生产环境用 .env 覆盖为 False
     database_url: str = (
-        "postgresql+asyncpg://smartdocs:smartdocs@localhost:5433/smartdocsdb"  # windows
-        # "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb"  # mac
+        # "postgresql+asyncpg://smartdocs:smartdocs@localhost:5433/smartdocsdb"  # windows
+        "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb"  # mac
     )
     jwt_secret_key: str = "dev-only-change-me"  # 生产环境务必用 .env 覆盖
     jwt_algorithm: str = "HS256"
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     embedding_base_url: str = "https://api.siliconflow.cn/v1"
     embedding_model: str = "BAAI/bge-m3"
     embedding_dimensions: int = 1024
+    redis_url: str = "redis://localhost:6379/0"
     chat_model: str = "deepseek-ai/DeepSeek-V4-Flash"
 
 
