@@ -4,12 +4,13 @@ from app.core.db import get_session
 from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import select, delete, update
 
 from app.models.document import Document
 from app.core.response import EnvelopeRoute
 from app.core.deps import get_current_user
 from app.models.user import User
+from app.models.chunk import Chunk
 from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
 from app.models.tenant import TenantRole
 from app.services.extraction import clean_text

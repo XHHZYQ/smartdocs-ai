@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, ForeignKey, Integer
 from sqlmodel import Field, SQLModel
 from pgvector.sqlalchemy import Vector
 from app.core.config import settings

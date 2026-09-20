@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartDocs · Document API Tester</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --radius: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card h2 .badge {
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #1e3a5f;
+      color: #93c5fd;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: var(--primary);
+    }
+
+    textarea {
+      min-height: 220px;
+      resize: vertical;
+      font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 640px) {
+      .row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .result {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    .result.success {
+      background: #0f2a1a;
+      border: 1px solid #166534;
+      color: #86efac;
+    }
+
+    .result.error {
+      background: #2a1215;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+    }
+
+    .result.empty {
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      color: var(--muted);
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .dot.ok {
+      background: var(--success);
+    }
+
+    .dot.fail {
+      background: var(--danger);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0;
+    }
+
+    .tab {
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 0.9rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" class="container">
+    <h1>SmartDocs · Document API Tester</h1>
+    <p class="subtitle">Vue3 + fetch · 专门用来测文档新增 / 更新（Markdown 友好）</p>
+
+    <div class="card">
+      <h2>连接配置</h2>
+      <div class="row">
+        <div class="field">
+          <label>Base URL</label>
+          <input v-model="baseUrl" placeholder="http://localhost:8000" />
+        </div>
+        <div class="field">
+          <label>Bearer Token（access_token）</label>
+          <input v-model="token" type="password" placeholder="粘贴 JWT access_token" />
+        </div>
+      </div>
+      <div class="status-bar">
+        <span class="dot" :class="token ? 'ok' : ''"></span>
+        <span>{{ token ? '已配置 Token' : '未配置 Token（创建/更新接口会 401）' }}</span>
+      </div>
+      <p class="hint">
+        Token 需已选租户（含 tid + role claim）。可先调 POST /auth/login，再 POST /tenants/select 拿带租户的 access_token。
+      </p>
+    </div>
+
+    <div class="tabs">
+      <button class="tab" :class="{ active: tab === 'create' }" @click="tab = 'create'">新增文档</button>
+      <button class="tab" :class="{ active: tab === 'update' }" @click="tab = 'update'">更新文档</button>
+    </div>
+
+    <div class="card" v-show="tab === 'create'">
+      <h2>POST /documents/create <span class="badge">201</span></h2>
+      <div class="field">
+        <label>title</label>
+        <input v-model="createForm.title" placeholder="文档标题" />
+      </div>
+      <div class="field">
+        <label>content（支持 Markdown）</label>
+        <textarea v-model="createForm.content" placeholder="# 标题&#10;&#10;这里写 Markdown 正文…"></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" :disabled="loading" @click="createDoc">
+          {{ loading ? '请求中…' : '创建文档' }}
+        </button>
+        <button class="btn btn-ghost" @click="fillSample('create')">填入示例 MD</button>
+      </div>
+      <div class="result" :class="result.create ? (result.create.ok ? 'success' : 'error') : 'empty'">{{ result.create ?
+        result.create.text : '响应会显示在这里' }}</div>
+    </div>
+
+    <div class="card" v-show="tab === 'update'">
+      <h2>PATCH /documents/update/{id} <span class="badge">200</span></h2>
+      <div class="field">
+        <label>document_id</label>
+        <input v-model.number="updateForm.id" type="number" min="1" placeholder="文档 ID" />
+      </div>
+      <div class="field">
+        <label>title（可选，不改可留空）</label>
+        <input v-model="updateForm.title" placeholder="新标题" />
+      </div>
+      <div class="field">
+        <label>content（可选，不改可留空；支持 Markdown）</label>
+        <textarea v-model="updateForm.content" placeholder="新内容（Markdown）…"></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" :disabled="loading" @click="updateDoc">
+          {{ loading ? '请求中…' : '更新文档' }}
+        </button>
+        <button class="btn btn-ghost" @click="fillSample('update')">填入示例 MD</button>
+      </div>
+      <div class="result" :class="result.update ? (result.update.ok ? 'success' : 'error') : 'empty'">{{ result.update ?
+        result.update.text : '响应会显示在这里' }}</div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive } = Vue;
+
+    const SAMPLE_MD = `# SmartDocs 测试文档
+
+这是一段 **Markdown** 示例，用来验证 content 字段能否正确入库。
+
+## 功能清单
+
+- 文档 CRUD
+- 切块 + Embedding
+- 语义检索
+- 流式问答
+
+\`\`\`python
+def hello():
+    print("Hello, RAG!")
+\`\`\`
+
+> Postman 对大段 MD 不太友好，所以用这个页面测。
+`;
+
+    createApp({
+      setup() {
+        const baseUrl = ref(localStorage.getItem("sd_base") || "http://localhost:8000");
+        const token = ref(localStorage.getItem("sd_token") || "");
+        const tab = ref("create");
+        const loading = ref(false);
+
+        const createForm = reactive({ title: "", content: "" });
+        const updateForm = reactive({ id: null, title: "", content: "" });
+        const result = reactive({ create: null, update: null });
+
+        const persist = () => {
+          localStorage.setItem("sd_base", baseUrl.value);
+          localStorage.setItem("sd_token", token.value);
+        };
+
+        async function request(method, path, body) {
+          persist();
+          const headers = { "Content-Type": "application/json" };
+          if (token.value) headers["Authorization"] = `Bearer ${token.value}`;
+
+          const res = await fetch(`${baseUrl.value.replace(/\/$/, "")}${path}`, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+          });
+
+          const text = await res.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = text;
+          }
+          return { status: res.status, ok: res.ok, data };
+        }
+
+        function formatResult(r) {
+          return JSON.stringify(
+            { status: r.status, ... (typeof r.data === "object" ? r.data : { raw: r.data }) },
+            null,
+            2
+          );
+        }
+
+        async function createDoc() {
+          if (!createForm.title.trim()) {
+            result.create = { ok: false, text: "title 不能为空" };
+            return;
+          }
+          loading.value = true;
+          result.create = null;
+          try {
+            const r = await request("POST", "/documents/create", {
+              title: createForm.title.trim(),
+              content: createForm.content,
+            });
+            result.create = { ok: r.ok, text: formatResult(r) };
+            if (r.ok && r.data?.data?.id) {
+              updateForm.id = r.data.data.id;
+            }
+          } catch (e) {
+            result.create = { ok: false, text: String(e) };
+          } finally {
+            loading.value = false;
+          }
+        }
+
+        async function updateDoc() {
+          if (!updateForm.id) {
+            result.update = { ok: false, text: "document_id 不能为空" };
+            return;
+          }
+          const body = {};
+          if (updateForm.title.trim()) body.title = updateForm.title.trim();
+          if (updateForm.content) body.content = updateForm.content;
+          if (Object.keys(body).length === 0) {
+            result.update = { ok: false, text: "至少填 title 或 content 之一" };
+            return;
+          }
+          loading.value = true;
+          result.update = null;
+          try {
+            const r = await request("PATCH", `/documents/update/${updateForm.id}`, body);
+            result.update = { ok: r.ok, text: formatResult(r) };
+          } catch (e) {
+            result.update = { ok: false, text: String(e) };
+          } finally {
+            loading.value = false;
+          }
+        }
+
+        function fillSample(which) {
+          if (which === "create") {
+            createForm.title = "Markdown 测试文档";
+            createForm.content = SAMPLE_MD;
+          } else {
+            updateForm.title = "Markdown 测试文档（已更新）";
+            updateForm.content = SAMPLE_MD + "\n\n---\n\n*Updated at " + new Date().toLocaleString() + "*";
+          }
+        }
+
+        return {
+          baseUrl,
+          token,
+          tab,
+          loading,
+          createForm,
+          updateForm,
+          result,
+          createDoc,
+          updateDoc,
+          fillSample,
+        };
+      },
+    }).mount("#app");
+  </script>
+</body>
+
+</html>
