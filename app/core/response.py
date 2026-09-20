@@ -11,6 +11,9 @@ class EnvelopeRoute(APIRoute):
 
         async def custom_handler(request: Request) -> Response:
             response = await original_handler(request)
+            # 204/304 等无响应体的场景不能解析 JSON，否则 json.loads(b'') 会抛 JSONDecodeError
+            if response.status_code in (204, 304) or not response.body:
+                return response
             if response.headers.get("content-type", "").startswith("application/json"):
                 data = json.loads(response.body)  # 解析 JSON 字符串为 Python 对象
                 body = json.dumps(  # 将 Python 对象转换为 JSON 字符串

@@ -11,6 +11,7 @@ from app.core.response import EnvelopeRoute
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.chunk import Chunk
+from app.models.document_file import DocumentFile
 from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
 from app.models.tenant import TenantRole
 from app.services.extraction import clean_text
