@@ -16,10 +16,17 @@ from app.services.extraction import clean_text, extract_text
 from app.models.chunk import Chunk
 from app.services.chunking import chunk_text
 from app.services.embedding import get_embeddings
-from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
+from app.core.deps import (
+    get_current_user,
+    get_tenant_context,
+    require_role,
+    TenantContext,
+)
 from app.models.tenant import TenantRole
 from app.core.cache import build_cache_key, cache_get, cache_set
-from app.core.redis import get_redis  # 如果后面要 Depends 也可以，这里直接用工具函数即可
+from app.core.cache import (
+    cache_delete_pattern,
+)  # 如果后面要 Depends 也可以，这里直接用工具函数即可
 
 
 router = APIRouter(
@@ -32,6 +39,7 @@ _ALLOWED_CONTENT_TYPES: dict[str, SourceType] = {
     "text/markdown": SourceType.MARKDOWN,
     "text/plain": SourceType.MARKDOWN,  # 部分客户端把 .md 标成 text/plain
 }
+
 
 def _resolve_source_type(filename: str, raw_bytes: bytes) -> SourceType | None:
     """内容嗅探优先，文件名后缀兜底。不再信任 content_type 请求头。"""
@@ -116,10 +124,12 @@ async def list_document_files(
 
 
 # 上传文档文件
-#1. 记录上传文件的基本信息
-#4. 关联存储文档（Document）
-#5. 关联存储文档块（Chunk）
-@router.post("/upload", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED)
+# 1. 记录上传文件的基本信息
+# 4. 关联存储文档（Document）
+# 5. 关联存储文档块（Chunk）
+@router.post(
+    "/upload", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED
+)
 async def upload_document_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -170,7 +180,9 @@ async def upload_document_file(
         document_id = document.id
 
         chunks = chunk_text(cleaned_text)
-        embeddings = await get_embeddings(chunks)  # 新增：批量生成向量，和 chunks 顺序一一对应
+        embeddings = await get_embeddings(
+            chunks
+        )  # 新增：批量生成向量，和 chunks 顺序一一对应
 
         chunk_records = [
             Chunk(
@@ -185,7 +197,7 @@ async def upload_document_file(
         ]
         session.add_all(chunk_records)
         await session.commit()
-        
+
         doc_file.document_id = document_id
         doc_file.extraction_status = ExtractionStatus.SUCCESS
     except Exception as e:
