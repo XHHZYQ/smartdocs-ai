@@ -17,6 +17,8 @@ from app.models.tenant import TenantRole
 from app.services.extraction import clean_text
 from app.services.chunking import chunk_text
 from app.services.embedding import get_embeddings
+from app.core.cache import build_cache_key, cache_get, cache_set, cache_delete_pattern
+from app.core.redis import get_redis  # 如果后面要 Depends 也可以，这里直接用工具函数即可
 
 router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
 
@@ -78,6 +80,7 @@ async def create_document(
         cleaned_text=cleaned,
     )
     await session.commit()
+    await cache_delete_pattern(f"docs:list:tenant={tenant_ctx.tenant_id}:*")
     await session.refresh(doc)
     return doc
 
@@ -90,6 +93,19 @@ async def list_documents(
     session: AsyncSession = Depends(get_session),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
 ) -> list[Document]:
+    cache_key = build_cache_key(
+        "docs:list",
+        tenant=tenant_ctx.tenant_id,
+        page=page,
+        size=page_size,
+    )
+
+    # 1. 先查缓存
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached  # 已经是 list[dict]，Pydantic 会再校验
+
+    # 2. 未命中 → 查 DB
     offset = (page - 1) * page_size
     result = await session.exec(
         select(Document)
@@ -98,7 +114,14 @@ async def list_documents(
         .offset(offset)
         .limit(page_size)
     )
-    return result.all()
+    docs = result.all()
+
+    # 3. 写入缓存（TTL 60s）
+    # Document 是 SQLModel，转成可序列化的 dict
+    payload = [doc.model_dump(mode="json") for doc in docs]
+    await cache_set(cache_key, payload, ttl=60)
+
+    return docs
 
 
 # 根据 id 获取文档
@@ -151,6 +174,8 @@ async def update_document(
         )
 
     await session.commit()
+    # 更新文档后需要删除缓存，保持缓存一致性
+    await cache_delete_pattern(f"docs:list:tenant={doc.tenant_id}:*")
     await session.refresh(doc)
     return doc
 
@@ -174,8 +199,11 @@ async def delete_document(
         .values(document_id=None)
     )
 
+    tenant_id = doc.tenant_id
+
     # 3. 删除文档本身
     # 以后软删除：改成 doc.deleted_at = ...; session.add(doc)
     # 以后审计：在这里插 AuditLog(before=snapshot, action="document.delete")
     await session.delete(doc)
     await session.commit()
+    await cache_delete_pattern(f"docs:list:tenant={tenant_id}:*")

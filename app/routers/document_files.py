@@ -18,6 +18,8 @@ from app.services.chunking import chunk_text
 from app.services.embedding import get_embeddings
 from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
 from app.models.tenant import TenantRole
+from app.core.cache import build_cache_key, cache_get, cache_set
+from app.core.redis import get_redis  # 如果后面要 Depends 也可以，这里直接用工具函数即可
 
 
 router = APIRouter(
@@ -60,9 +62,22 @@ async def list_document_files(
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentFilePage:
+    cache_key = build_cache_key(
+        "docfiles:list",
+        tenant=tenant_ctx.tenant_id,
+        page=page,
+        size=page_size,
+        status=status.value if status else None,
+        q=q,
+    )
+
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return DocumentFilePage(**cached)
+
+    # ---------- 原有 DB 查询逻辑保持不变 ----------
     skip = (page - 1) * page_size  # 在函数内部换算，对外语义更直观
     limit = page_size
-
     conditions = [DocumentFile.tenant_id == tenant_ctx.tenant_id]
 
     if status is not None:
@@ -87,7 +102,17 @@ async def list_document_files(
     )
     items = result.all()
 
-    return DocumentFilePage(items=items, total=total, page=page, page_size=page_size)
+    page_data = DocumentFilePage(
+        items=items, total=total, page=page, page_size=page_size
+    )
+
+    # 写入缓存
+    await cache_set(
+        cache_key,
+        page_data.model_dump(mode="json"),
+        ttl=60,
+    )
+    return page_data
 
 
 # 上传文档文件
@@ -171,6 +196,7 @@ async def upload_document_file(
 
     session.add(doc_file)
     await session.commit()
+    await cache_delete_pattern(f"docfiles:list:tenant={tenant_id}:*")
     await session.refresh(doc_file)
 
     return doc_file
