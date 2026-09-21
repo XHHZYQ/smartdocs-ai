@@ -7,6 +7,7 @@ from sqlalchemy import Column, DateTime
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
+
 # 文档表，文档的基本信息和内容，以及关联关系
 class Document(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)

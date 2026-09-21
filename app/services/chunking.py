@@ -2,6 +2,7 @@ import re
 
 _CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
 
+
 def _split_into_paragraphs(text: str) -> list[str]:
     """段落切分：把代码块（```...```）当作不可再拆的整体，
     避免代码块内部的空行被误判为段落分隔符，导致代码和说明文字被强行拆散。

@@ -1,6 +1,8 @@
 from app.services.chunking import chunk_text
 
-with open("/Users/xuhonghui/Downloads/docker compose 插值语法.md", encoding="utf-8") as f:
+with open(
+    "/Users/xuhonghui/Downloads/docker compose 插值语法.md", encoding="utf-8"
+) as f:
     text = f.read()
 
 chunks = chunk_text(text)

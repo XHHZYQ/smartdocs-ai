@@ -6,6 +6,7 @@ import httpx
 
 from app.core.config import settings
 
+
 class LLMServiceError(Exception):
     """LLM 服务调用失败时抛出，携带可直接展示给用户的错误信息"""
 
@@ -53,7 +54,7 @@ async def stream_chat(messages: list[dict[str, str]]) -> AsyncGenerator[str, Non
                         line = line.strip()
                         if not line or not line.startswith("data:"):
                             continue
-                        payload = line[len("data:"):].lstrip()
+                        payload = line[len("data:") :].lstrip()
                         if payload == "[DONE]":
                             continue
                         chunk = json.loads(payload)

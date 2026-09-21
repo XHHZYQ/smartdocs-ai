@@ -5,6 +5,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 @router.get("/debug/redis-ping")
 async def redis_ping(r: redis.Redis = Depends(get_redis)):
     return {"pong": await r.ping()}

@@ -1,4 +1,5 @@
 """临时验证脚本：确认 SiliconFlow embedding API 链路通、维度对"""
+
 import asyncio
 
 import httpx

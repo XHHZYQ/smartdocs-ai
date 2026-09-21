@@ -37,6 +37,7 @@ app.add_middleware(
 )
 register_exception_handlers(app)
 
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
@@ -46,6 +47,7 @@ async def log_requests(request: Request, call_next):
         f"{request.method} {request.url.path} -> {response.status_code} ({duration_ms:.1f}ms)"
     )
     return response
+
 
 app.include_router(debug.router)
 app.include_router(auth.router)

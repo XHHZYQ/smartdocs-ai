@@ -8,7 +8,12 @@ from app.core.response import EnvelopeRoute
 from app.core.security import create_access_token
 from app.models.tenant import Tenant, TenantMembership, TenantRole
 from app.models.user import User
-from app.schemas.tenant import MembershipRead, SelectTenantRequest, TenantCreate, TenantRead
+from app.schemas.tenant import (
+    MembershipRead,
+    SelectTenantRequest,
+    TenantCreate,
+    TenantRead,
+)
 from app.schemas.user import AccessTokenResponse
 
 router = APIRouter(prefix="/tenants", tags=["tenants"], route_class=EnvelopeRoute)
@@ -33,7 +38,9 @@ async def create_tenant(
     await session.refresh(tenant)
 
     session.add(
-        TenantMembership(user_id=current_user.id, tenant_id=tenant.id, role=TenantRole.OWNER)
+        TenantMembership(
+            user_id=current_user.id, tenant_id=tenant.id, role=TenantRole.OWNER
+        )
     )
     await session.commit()
     await session.refresh(tenant)
@@ -52,7 +59,9 @@ async def list_my_tenants(
         .where(TenantMembership.user_id == current_user.id)
     )
     return [
-        MembershipRead(tenant_id=m.tenant_id, tenant_name=name, tenant_slug=slug, role=m.role)
+        MembershipRead(
+            tenant_id=m.tenant_id, tenant_name=name, tenant_slug=slug, role=m.role
+        )
         for m, name, slug in result.all()
     ]
 

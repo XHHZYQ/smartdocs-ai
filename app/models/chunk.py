@@ -5,6 +5,7 @@ from sqlmodel import Field, SQLModel
 from pgvector.sqlalchemy import Vector
 from app.core.config import settings
 
+
 # 文档分块表，记录文档的分块内容和元数据，以及关联关系
 class Chunk(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)

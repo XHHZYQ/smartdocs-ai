@@ -15,7 +15,9 @@ class MessageRole(str, Enum):
 class Message(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     tenant_id: int = Field(foreign_key="tenant.id", nullable=False, index=True)
-    conversation_id: int = Field(foreign_key="conversation.id", nullable=False, index=True)
+    conversation_id: int = Field(
+        foreign_key="conversation.id", nullable=False, index=True
+    )
     role: MessageRole = Field(nullable=False)
     content: str = Field(nullable=False)
     created_at: datetime = Field(

@@ -26,7 +26,7 @@ class InterceptHandler(logging.Handler):
         )
 
 
-def  setup_logging() -> None:
+def setup_logging() -> None:
     logger.remove()  # 移除 loguru 默认 handler，自己重新配置
 
     logger.add(

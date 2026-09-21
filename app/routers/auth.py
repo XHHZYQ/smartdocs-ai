@@ -25,6 +25,7 @@ from app.schemas.user import (
 
 router = APIRouter(prefix="/auth", tags=["auth"], route_class=EnvelopeRoute)
 
+
 # 注册用户
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register(

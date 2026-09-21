@@ -18,14 +18,21 @@ from app.schemas.message import MessageRead
 from app.services.llm import stream_chat
 from app.services.prompt import build_messages
 from app.services.retrieval import retrieve_chunks
-from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
+from app.core.deps import (
+    get_current_user,
+    get_tenant_context,
+    require_role,
+    TenantContext,
+)
 from app.models.tenant import TenantRole
 
 router = APIRouter(prefix="/chat", tags=["chat"], route_class=EnvelopeRoute)
 
 
 async def _get_or_create_conversation(
-    session: AsyncSession, owner_id: int, conversation_id: int | None,
+    session: AsyncSession,
+    owner_id: int,
+    conversation_id: int | None,
     tenant_id: int = Depends(get_tenant_context),
 ) -> Conversation:
     if conversation_id is not None:
@@ -41,7 +48,9 @@ async def _get_or_create_conversation(
     return conv
 
 
-async def _load_history(session: AsyncSession, conversation_id: int) -> list[dict[str, str]]:
+async def _load_history(
+    session: AsyncSession, conversation_id: int
+) -> list[dict[str, str]]:
     """取出该会话目前为止的全部历史消息，按时间正序。
     暂不做滑动窗口截断——历史多长就带多长，先跑通流程，token 超限了再优化。
     """
@@ -104,7 +113,10 @@ async def chat(
     user_id = current_user.id
     tenant_id = tenant_ctx.tenant_id
     conversation = await _get_or_create_conversation(
-        session=session, owner_id=user_id, conversation_id=payload.conversation_id, tenant_id=tenant_id
+        session=session,
+        owner_id=user_id,
+        conversation_id=payload.conversation_id,
+        tenant_id=tenant_id,
     )
     conversation_id = conversation.id
 
@@ -121,7 +133,9 @@ async def chat(
     await session.commit()
 
     return StreamingResponse(
-        _sse_event_stream(payload.query, payload.top_k, tenant_id, conversation_id, history),
+        _sse_event_stream(
+            payload.query, payload.top_k, tenant_id, conversation_id, history
+        ),
         media_type="text/event-stream",
         headers={"X-Conversation-Id": str(conversation_id)},
     )

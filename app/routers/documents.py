@@ -12,15 +12,23 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.chunk import Chunk
 from app.models.document_file import DocumentFile
-from app.core.deps import get_current_user, get_tenant_context, require_role, TenantContext
+from app.core.deps import (
+    get_current_user,
+    get_tenant_context,
+    require_role,
+    TenantContext,
+)
 from app.models.tenant import TenantRole
 from app.services.extraction import clean_text
 from app.services.chunking import chunk_text
 from app.services.embedding import get_embeddings
 from app.core.cache import build_cache_key, cache_get, cache_set, cache_delete_pattern
-from app.core.redis import get_redis  # 如果后面要 Depends 也可以，这里直接用工具函数即可
+from app.core.redis import (
+    get_redis,
+)  # 如果后面要 Depends 也可以，这里直接用工具函数即可
 
 router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
+
 
 async def _rebuild_chunks(
     session: AsyncSession,
@@ -52,7 +60,9 @@ async def _rebuild_chunks(
 
 
 # 创建文档
-@router.post("/create", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/create", response_model=DocumentRead, status_code=status.HTTP_201_CREATED
+)
 async def create_document(
     payload: DocumentCreate,
     session: AsyncSession = Depends(get_session),
@@ -61,7 +71,9 @@ async def create_document(
 ) -> Document:
     cleaned = clean_text(payload.content)
     if not cleaned:
-        raise HTTPException(status_code=400, detail="Document content is empty after cleaning")
+        raise HTTPException(
+            status_code=400, detail="Document content is empty after cleaning"
+        )
 
     doc = Document(
         title=payload.title,
@@ -70,7 +82,7 @@ async def create_document(
         tenant_id=tenant_ctx.tenant_id,
     )
     session.add(doc)
-    await session.flush()          # 拿到 doc.id，还没 commit
+    await session.flush()  # 拿到 doc.id，还没 commit
     await session.refresh(doc)
 
     await _rebuild_chunks(
@@ -155,7 +167,9 @@ async def update_document(
     if content_changed:
         cleaned = clean_text(updates["content"] or "")
         if not cleaned:
-            raise HTTPException(status_code=400, detail="Document content is empty after cleaning")
+            raise HTTPException(
+                status_code=400, detail="Document content is empty after cleaning"
+            )
         updates["content"] = cleaned
 
     for field, value in updates.items():
@@ -178,6 +192,7 @@ async def update_document(
     await cache_delete_pattern(f"docs:list:tenant={doc.tenant_id}:*")
     await session.refresh(doc)
     return doc
+
 
 # 删除文档
 @router.delete("/delete/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -14,6 +14,7 @@ from app.core.deps import get_tenant_context, TenantContext
 
 router = APIRouter(prefix="/search", tags=["search"], route_class=EnvelopeRoute)
 
+
 # 通过chunk搜索文档
 # 前端关键字转换为向量，再与数据库中的向量进行相似度计算，返回相似度最高的文档
 @router.post("/chunk", response_model=list[SearchResult])
