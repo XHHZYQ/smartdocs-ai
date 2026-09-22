@@ -1,6 +1,4 @@
 # app/core/exceptions.py
-import time
-
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -37,9 +35,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     # 同时带上 Retry-After 头,客户端可按这个秒数退避重试
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded):
-        # exc.limit 是 slowapi 的 Limit 对象,.item 是底层 RateLimitItem
-        # RateLimitItem.get_expiry() 返回窗口过期的 unix 时间戳
-        retry_after = max(int(exc.limit.item.get_expiry() - time.time()), 1)
+        # exc.limit 是 slowapi 的 Limit 包装对象,.limit 才是底层 RateLimitItem
+        # RateLimitItem.get_expiry() 返回限流窗口时长(秒,例如 "1/minute" -> 60),
+        # 直接作为 Retry-After 退避秒数(窗口时长是安全上界,客户端不会过早重试)
+        retry_after = max(int(exc.limit.limit.get_expiry()), 1)
         headers = {"Retry-After": str(retry_after)}
         return JSONResponse(
             status_code=429,
