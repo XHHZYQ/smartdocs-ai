@@ -1,33 +1,44 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.concurrency import run_in_threadpool
-from sqlalchemy import func
-from sqlmodel import select
 import filetype
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from loguru import logger
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from starlette.concurrency import run_in_threadpool
 
+from app.core.cache import (
+    build_cache_key,
+    cache_delete_pattern,
+    cache_get,
+    cache_set,
+)  # 如果后面要 Depends 也可以，这里直接用工具函数即可
 from app.core.db import get_session
-from app.models.user import User
-from app.models.document import Document
-from app.models.document_file import DocumentFile, ExtractionStatus, SourceType
-from app.schemas.document_file import DocumentFileRead, DocumentFilePage
-from app.core.response import EnvelopeRoute
-from app.services.extraction import clean_text, extract_text
-from app.models.chunk import Chunk
-from app.services.chunking import chunk_text
-from app.services.embedding import get_embeddings
 from app.core.deps import (
+    TenantContext,
     get_current_user,
     get_tenant_context,
     require_role,
-    TenantContext,
 )
+from app.core.limiter import limiter
+from app.core.response import EnvelopeRoute
+from app.models.chunk import Chunk
+from app.models.document import Document
+from app.models.document_file import DocumentFile, ExtractionStatus, SourceType
 from app.models.tenant import TenantRole
-from app.core.cache import build_cache_key, cache_get, cache_set
-from app.core.cache import (
-    cache_delete_pattern,
-)  # 如果后面要 Depends 也可以，这里直接用工具函数即可
-
+from app.models.user import User
+from app.schemas.document_file import DocumentFilePage, DocumentFileRead
+from app.services.chunking import chunk_text
+from app.services.embedding import get_embeddings
+from app.services.extraction import clean_text, extract_text
 
 router = APIRouter(
     prefix="/document-files", tags=["document-files"], route_class=EnvelopeRoute
@@ -62,7 +73,9 @@ def _resolve_source_type(filename: str, raw_bytes: bytes) -> SourceType | None:
 # 必须放在其他带路径参数的路由(比如以后有 /document-files/{id})之前,否则 FastAPI 会先匹配到路径参数路由
 # 获取用户文档文件列表
 @router.get("/list", response_model=DocumentFilePage)
+@limiter.limit("120/minute")
 async def list_document_files(
+    request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
     status: ExtractionStatus | None = Query(None),
@@ -130,7 +143,9 @@ async def list_document_files(
 @router.post(
     "/upload", response_model=DocumentFileRead, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit("20/minute")
 async def upload_document_file(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     tenant_ctx: TenantContext = Depends(require_role(TenantRole.MEMBER)),

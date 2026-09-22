@@ -25,6 +25,7 @@ dependencies = [
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "redis>=5.0.0",
+    "slowapi>=0.1.10",
 ]
 
 [tool.hatch.build.targets.wheel]

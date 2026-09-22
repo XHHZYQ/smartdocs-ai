@@ -2,14 +2,18 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from loguru import logger
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
+from slowapi.middleware import SlowAPIMiddleware
+
+from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
+from app.core.limiter import limiter
+from app.core.logging import setup_logging
+from app.core.redis import close_redis, init_redis
 
 # from app.core.db import init_db
-from app.routers import auth, documents, document_files, search, chat, tenant, debug
-from app.core.exceptions import register_exception_handlers
-from app.core.logging import setup_logging
-from app.core.redis import init_redis, close_redis
+from app.routers import auth, chat, debug, document_files, documents, search, tenant
 
 
 @asynccontextmanager
@@ -35,6 +39,13 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Conversation-Id"],  # 让前端 fetch 能读到这个响应头
 )
+
+# ===== 限流:把 limiter 挂到 app.state,slowapi 中间件从这里取 =====
+# RateLimitExceeded handler 在 register_exception_handlers 里注册(走项目统一 envelope)
+app.state.limiter = limiter
+if settings.rate_limit_enabled:
+    app.add_middleware(SlowAPIMiddleware)
+
 register_exception_handlers(app)
 
 

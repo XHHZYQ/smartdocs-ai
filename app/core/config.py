@@ -4,8 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     debug: bool = True  # 生产环境用 .env 覆盖为 False
     database_url: str = (
-        # "postgresql+asyncpg://smartdocs:smartdocs@localhost:5433/smartdocsdb"  # windows, 安装的是docker版本
-        "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb"  # mac 安装的是命令行版本，不是docker版本
+        "postgresql+asyncpg://smartdocs:smartdocs@localhost:5433/smartdocsdb"  # windows, 安装的是docker版本
+        # "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb"  # mac 安装的是命令行版本，不是docker版本
     )
     jwt_secret_key: str = "dev-only-change-me"  # 生产环境务必用 .env 覆盖
     jwt_algorithm: str = "HS256"
@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1024
     redis_url: str = "redis://localhost:6379/0"
     chat_model: str = "deepseek-ai/DeepSeek-V4-Flash"
+
+    # 限流配置:开发环境可关掉;enabled=False 时所有 @limiter.limit 装饰器自动放行
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "60/minute"
 
 
 settings = Settings()

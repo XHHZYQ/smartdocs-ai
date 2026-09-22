@@ -1,7 +1,10 @@
 # app/core/exceptions.py
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
@@ -28,6 +31,24 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"code": exc.status_code, "data": None, "msg": exc.detail},
+        )
+
+    # 限流触发:slowapi 默认返回 {"message": "..."},这里覆盖成项目统一 envelope
+    # 同时带上 Retry-After 头,客户端可按这个秒数退避重试
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded):
+        # exc.limit 是 slowapi 的 Limit 对象,.item 是底层 RateLimitItem
+        # RateLimitItem.get_expiry() 返回窗口过期的 unix 时间戳
+        retry_after = max(int(exc.limit.item.get_expiry() - time.time()), 1)
+        headers = {"Retry-After": str(retry_after)}
+        return JSONResponse(
+            status_code=429,
+            content={
+                "code": 429,
+                "data": None,
+                "msg": "请求过于频繁,请稍后再试",
+            },
+            headers=headers,
         )
 
     # Pydantic 校验失败（比如 payload 少传字段）

@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jwt import InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.db import get_session
+from app.core.limiter import limiter
+from app.core.response import EnvelopeRoute
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -12,9 +14,8 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.models.tenant import TenantMembership
 from app.models.user import User
-from app.core.response import EnvelopeRoute
-from app.models.tenant import TenantMembership, TenantRole
 from app.schemas.user import (
     AccessTokenResponse,
     RefreshRequest,
@@ -28,7 +29,9 @@ router = APIRouter(prefix="/auth", tags=["auth"], route_class=EnvelopeRoute)
 
 # 注册用户
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     payload: UserCreate,
     session: AsyncSession = Depends(get_session),
 ) -> User:
@@ -45,7 +48,9 @@ async def register(
 
 # 登录用户
 @router.post("/login", response_model=Token)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     # OAuth2PasswordRequestForm 字段名固定是 username/password，这里用 username 承载 email
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: AsyncSession = Depends(get_session),
@@ -76,7 +81,9 @@ async def login(
 
 # 刷新访问令牌
 @router.post("/refresh/access_token", response_model=AccessTokenResponse)
+@limiter.limit("20/minute")
 async def refresh(
+    request: Request,
     payload: RefreshRequest,
     session: AsyncSession = Depends(get_session),
 ) -> AccessTokenResponse:

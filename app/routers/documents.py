@@ -1,31 +1,28 @@
 from datetime import UTC, datetime
 
-from app.core.db import get_session
-from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, delete, update
+from sqlmodel import delete, select, update
 
-from app.models.document import Document
-from app.core.response import EnvelopeRoute
-from app.core.deps import get_current_user
-from app.models.user import User
-from app.models.chunk import Chunk
-from app.models.document_file import DocumentFile
+from app.core.cache import build_cache_key, cache_delete_pattern, cache_get, cache_set
+from app.core.db import get_session
 from app.core.deps import (
+    TenantContext,
     get_current_user,
     get_tenant_context,
     require_role,
-    TenantContext,
 )
+from app.core.limiter import limiter
+from app.core.response import EnvelopeRoute
+from app.models.chunk import Chunk
+from app.models.document import Document
+from app.models.document_file import DocumentFile
 from app.models.tenant import TenantRole
-from app.services.extraction import clean_text
+from app.models.user import User
+from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
 from app.services.chunking import chunk_text
 from app.services.embedding import get_embeddings
-from app.core.cache import build_cache_key, cache_get, cache_set, cache_delete_pattern
-from app.core.redis import (
-    get_redis,
-)  # 如果后面要 Depends 也可以，这里直接用工具函数即可
+from app.services.extraction import clean_text
 
 router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
 
@@ -63,7 +60,9 @@ async def _rebuild_chunks(
 @router.post(
     "/create", response_model=DocumentRead, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit("30/minute")
 async def create_document(
+    request: Request,
     payload: DocumentCreate,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -99,7 +98,9 @@ async def create_document(
 
 # 获取用户文档列表
 @router.get("/list", response_model=list[DocumentRead])
+@limiter.limit("120/minute")
 async def list_documents(
+    request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=20),
     session: AsyncSession = Depends(get_session),
@@ -138,7 +139,9 @@ async def list_documents(
 
 # 根据 id 获取文档
 @router.get("/detail/{document_id}", response_model=DocumentRead)
+@limiter.limit("60/minute")
 async def get_document(
+    request: Request,
     document_id: int,
     session: AsyncSession = Depends(get_session),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
@@ -151,7 +154,9 @@ async def get_document(
 
 # 更新文档
 @router.patch("/update/{document_id}", response_model=DocumentRead)
+@limiter.limit("30/minute")
 async def update_document(
+    request: Request,
     document_id: int,
     payload: DocumentUpdate,
     session: AsyncSession = Depends(get_session),
@@ -196,7 +201,9 @@ async def update_document(
 
 # 删除文档
 @router.delete("/delete/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
 async def delete_document(
+    request: Request,
     document_id: int,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),

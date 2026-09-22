@@ -1,30 +1,29 @@
-from datetime import datetime, timezone
-
 import json
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.db import get_session, new_session
-from app.core.deps import get_current_user
+from app.core.deps import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+    require_role,
+)
+from app.core.limiter import limiter
 from app.core.response import EnvelopeRoute
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
+from app.models.tenant import TenantRole
 from app.models.user import User
 from app.schemas.chat import ChatRequest
 from app.schemas.message import MessageRead
 from app.services.llm import stream_chat
 from app.services.prompt import build_messages
 from app.services.retrieval import retrieve_chunks
-from app.core.deps import (
-    get_current_user,
-    get_tenant_context,
-    require_role,
-    TenantContext,
-)
-from app.models.tenant import TenantRole
 
 router = APIRouter(prefix="/chat", tags=["chat"], route_class=EnvelopeRoute)
 
@@ -96,7 +95,7 @@ async def _sse_event_stream(
         )
         conversation = await session.get(Conversation, conversation_id)
         if conversation is not None:
-            conversation.updated_at = datetime.now(timezone.utc)
+            conversation.updated_at = datetime.now(UTC)
             session.add(conversation)
         await session.commit()
 
@@ -104,7 +103,9 @@ async def _sse_event_stream(
 
 
 @router.post("/complete")
+@limiter.limit("10/minute")
 async def chat(
+    request: Request,
     payload: ChatRequest,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -143,7 +144,9 @@ async def chat(
 
 # 方便调试/前端加载历史用：查看某个会话目前存了哪些消息
 @router.get("/history/{conversation_id}", response_model=list[MessageRead])
+@limiter.limit("60/minute")
 async def get_history(
+    request: Request,
     conversation_id: int,
     session: AsyncSession = Depends(get_session),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
