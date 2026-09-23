@@ -13,9 +13,10 @@ class SourceType(str, Enum):
 
 
 class ExtractionStatus(str, Enum):
-    """文本提取处理的状态机：pending -> success / failed"""
+    """文本提取处理的状态机：pending -> processing -> success / failed"""
 
     PENDING = "pending"
+    PROCESSING = "processing"
     SUCCESS = "success"
     FAILED = "failed"
 

@@ -26,12 +26,14 @@ dependencies = [
     "loguru>=0.7.3",
     "redis>=5.0.0",
     "slowapi>=0.1.10",
+    "arq[watch]>=0.28.0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
 [project.scripts]
+worker = "app.cli:worker"
 dev = "app.cli:dev"
 
 [dependency-groups]

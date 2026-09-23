@@ -10,4 +10,7 @@ logs/*.log
 # Virtual environments
 .venv
 
+# 上传文件落盘目录（阶段8 arq）
+data/
+
 .DS_Store

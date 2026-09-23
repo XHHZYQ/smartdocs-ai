@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.limiter import limiter
 from app.core.logging import setup_logging
+from app.core.queue import close_queue, init_queue
 from app.core.redis import close_redis, init_redis
 
 # from app.core.db import init_db
@@ -23,10 +24,13 @@ async def lifespan(app: FastAPI):
 
     # ===== 启动时连 Redis =====
     await init_redis()
+    # arq 任务队列连接池（db1，与缓存隔离）
+    await init_queue()
 
     yield
 
-    # ===== 关闭时断开 Redis =====
+    # ===== 关闭时断开队列 / Redis =====
+    await close_queue()
     await close_redis()
 
 
