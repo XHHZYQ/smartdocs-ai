@@ -6,6 +6,7 @@
 
 from arq.connections import RedisSettings
 
+import app.models  # noqa: F401  # 注册所有表到 SQLModel.metadata，避免 worker 独立进程里外键解析报 NoReferencedTableError
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.redis import close_redis, init_redis
