@@ -1,8 +1,8 @@
 """文档处理 ETL 任务。
 
-流水线（对照原 upload 接口里的同步逻辑，搬到独立 worker 进程）：
-  processing → 幂等清理旧产物 → 读原始文件 → extract/clean
-  → 建 Document → chunk → embedding(分批) → 写 Chunks → success
+两条链路共用 build_chunk_records（切块 + 向量化 + 构造 Chunk）：
+  - process_document_file：上传文件 → 提取/清洗 → 建 Document → 切块+向量化 → 写 Chunks
+  - rebuild_document_chunks：document create/update → 已有 cleaned_text → 切块+向量化 → 写 Chunks
 
 错误分类：
   - 外部依赖抖动（embedding 超时/网络错误/5xx）→ Retry，指数退避，最多 arq_max_tries 次
@@ -24,8 +24,7 @@ from app.core.db import new_session
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.document_file import DocumentFile, ExtractionStatus
-from app.services.chunking import chunk_text
-from app.services.embedding import get_embeddings
+from app.services.chunking import build_chunk_records
 from app.services.extraction import clean_text, extract_text
 from app.services.storage import read_file
 
@@ -82,29 +81,25 @@ async def process_document_file(ctx: dict, doc_file_id: int) -> None:
                 content=cleaned_text,
                 owner_id=owner_id,
                 tenant_id=tenant_id,
+                processing_status=ExtractionStatus.PROCESSING,
             )
             session.add(document)
             await session.flush()
             await session.refresh(document)
             document_id = document.id
 
-            # ---------- 3. 切块 + 分批向量化 ----------
-            chunks = chunk_text(cleaned_text)
-            embeddings = await get_embeddings(chunks)
-
-            # ---------- 4. 写 Chunks ----------
-            chunk_records = [
-                Chunk(
-                    tenant_id=tenant_id,
-                    document_id=document_id,
-                    chunk_index=idx,
-                    content=chunk,
-                    char_count=len(chunk),
-                    embedding=embedding,
-                )
-                for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
-            ]
+            # ---------- 3. 切块 + 分批向量化（公共函数） ----------
+            chunk_records = await build_chunk_records(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                cleaned_text=cleaned_text,
+            )
             session.add_all(chunk_records)
+
+            # ---------- 4. 完成：关联 DocumentFile + 翻转状态 ----------
+            document.processing_status = ExtractionStatus.SUCCESS
+            document.error_message = None
+            session.add(document)
 
             doc_file.document_id = document_id
             doc_file.extraction_status = ExtractionStatus.SUCCESS
@@ -115,20 +110,81 @@ async def process_document_file(ctx: dict, doc_file_id: int) -> None:
         except Retry:
             raise
         except (httpx.TimeoutException, httpx.TransportError) as exc:
-            await _handle_retryable(session, doc_file_id, job_try, exc)
+            await _handle_retryable_docfile(session, doc_file_id, job_try, exc)
         except httpx.HTTPStatusError as exc:
             # 5xx 服务端抖动可重试；4xx（key 错误/参数非法等）重试无意义
             if exc.response.status_code >= 500:
-                await _handle_retryable(session, doc_file_id, job_try, exc)
-            await _mark_failed(session, doc_file_id, exc)
+                await _handle_retryable_docfile(session, doc_file_id, job_try, exc)
+            await _mark_docfile_failed(session, doc_file_id, exc)
         except Exception as exc:
             # ValueError/FileNotFoundError/PDF 解析错误等：数据问题，不重试
-            await _mark_failed(session, doc_file_id, exc)
+            await _mark_docfile_failed(session, doc_file_id, exc)
 
         await cache_delete_pattern(f"docfiles:list:tenant={tenant_id}:*")
+        await cache_delete_pattern(f"docs:list:tenant={tenant_id}:*")
 
 
-async def _handle_retryable(
+@func
+async def rebuild_document_chunks(ctx: dict, document_id: int) -> None:
+    """document create/update 接口的 ETL 任务。
+
+    接口只负责：建 Document（status=PROCESSING）+ 入队 + 立即返回。
+    本任务做剩下的事：切块 + 向量化 + 写 Chunks + 翻状态。
+    """
+    job_try: int = ctx.get("job_try", 1)
+
+    async with new_session() as session:
+        document = await session.get(Document, document_id)
+        if document is None:
+            logger.warning("document {} 不存在，任务安全退出", document_id)
+            return
+
+        tenant_id = document.tenant_id
+        cleaned_text = document.content
+
+        # ---------- 翻转 processing（含每一轮重试），并失效列表缓存 ----------
+        document.processing_status = ExtractionStatus.PROCESSING
+        document.error_message = None
+        session.add(document)
+        await session.commit()
+        await cache_delete_pattern(f"docs:list:tenant={tenant_id}:*")
+
+        try:
+            # ---------- 幂等：重跑前清掉上一轮 Chunk ----------
+            await session.exec(delete(Chunk).where(Chunk.document_id == document_id))
+
+            # ---------- 切块 + 向量化（公共函数） ----------
+            chunk_records = await build_chunk_records(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                cleaned_text=cleaned_text,
+            )
+            session.add_all(chunk_records)
+
+            # ---------- 完成 ----------
+            document.processing_status = ExtractionStatus.SUCCESS
+            document.error_message = None
+            session.add(document)
+            await session.commit()
+
+        except Retry:
+            raise
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            await _handle_retryable_doc(session, document_id, job_try, exc)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code >= 500:
+                await _handle_retryable_doc(session, document_id, job_try, exc)
+            await _mark_doc_failed(session, document_id, exc)
+        except Exception as exc:
+            await _mark_doc_failed(session, document_id, exc)
+
+        await cache_delete_pattern(f"docs:list:tenant={tenant_id}:*")
+
+
+# ---------------- 文件链路（DocumentFile）的错误处理 ----------------
+
+
+async def _handle_retryable_docfile(
     session, doc_file_id: int, job_try: int, exc: Exception
 ) -> None:
     """可重试错误：未达上限则 rollback 后抛 Retry（arq 把 job 置 deferred，到点重跑）。"""
@@ -138,7 +194,7 @@ async def _handle_retryable(
         logger.error(
             "doc_file {} 已尝试 {} 次仍失败，落 failed", doc_file_id, max_tries
         )
-        await _mark_failed(session, doc_file_id, exc, retry_exhausted=True)
+        await _mark_docfile_failed(session, doc_file_id, exc, retry_exhausted=True)
         return
 
     await session.rollback()
@@ -154,7 +210,7 @@ async def _handle_retryable(
     raise Retry(defer=timedelta(seconds=delay)) from exc
 
 
-async def _mark_failed(
+async def _mark_docfile_failed(
     session, doc_file_id: int, exc: Exception, retry_exhausted: bool = False
 ) -> None:
     """落 failed。先 rollback 清掉半成品事务（如已 flush 的 Document），再重新取记录。"""
@@ -169,3 +225,47 @@ async def _mark_failed(
     session.add(doc_file)
     await session.commit()
     logger.exception("doc_file {} 处理失败", doc_file_id)
+
+
+# ---------------- 文档直传链路（Document create/update）的错误处理 ----------------
+
+
+async def _handle_retryable_doc(
+    session, document_id: int, job_try: int, exc: Exception
+) -> None:
+    max_tries = settings.arq_max_tries
+
+    if job_try >= max_tries:
+        logger.error(
+            "document {} 已尝试 {} 次仍失败，落 failed", document_id, max_tries
+        )
+        await _mark_doc_failed(session, document_id, exc, retry_exhausted=True)
+        return
+
+    await session.rollback()
+    delay = _RETRY_DELAYS[min(job_try - 1, len(_RETRY_DELAYS) - 1)]
+    logger.warning(
+        "document {} 第 {}/{} 次尝试失败，{}s 后重试: {}",
+        document_id,
+        job_try,
+        max_tries,
+        delay,
+        exc,
+    )
+    raise Retry(defer=timedelta(seconds=delay)) from exc
+
+
+async def _mark_doc_failed(
+    session, document_id: int, exc: Exception, retry_exhausted: bool = False
+) -> None:
+    await session.rollback()
+    document = await session.get(Document, document_id)
+    if document is None:
+        return
+
+    prefix = "重试次数耗尽: " if retry_exhausted else ""
+    document.processing_status = ExtractionStatus.FAILED
+    document.error_message = f"{prefix}{type(exc).__name__}: {exc}"[:500]
+    session.add(document)
+    await session.commit()
+    logger.exception("document {} 处理失败", document_id)

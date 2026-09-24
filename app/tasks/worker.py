@@ -10,7 +10,7 @@ import app.models  # noqa: F401  # 注册所有表到 SQLModel.metadata，避免
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.redis import close_redis, init_redis
-from app.tasks.document_jobs import process_document_file
+from app.tasks.document_jobs import process_document_file, rebuild_document_chunks
 
 
 async def on_startup(ctx: dict) -> None:
@@ -26,7 +26,7 @@ async def on_shutdown(ctx: dict) -> None:
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.arq_redis_url)
-    functions = [process_document_file]
+    functions = [process_document_file, rebuild_document_chunks]
     on_startup = on_startup
     on_shutdown = on_shutdown
     max_jobs = settings.arq_max_jobs  # 单 worker 并发 job 数

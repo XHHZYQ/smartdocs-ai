@@ -1,5 +1,8 @@
 import re
 
+from app.models.chunk import Chunk
+from app.services.embedding import get_embeddings
+
 _CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
 
 
@@ -71,3 +74,32 @@ def _split_long_paragraph(paragraph: str, chunk_size: int, overlap: int) -> list
             break
         start = end - overlap
     return chunks
+
+
+async def build_chunk_records(
+    tenant_id: int, document_id: int, cleaned_text: str
+) -> list[Chunk]:
+    """公共函数：切块 + 批量向量化 + 构造 Chunk 记录列表。
+
+    被以下链路复用：
+      - app.tasks.document_jobs.process_document_file（文件上传 ETL）
+      - app.tasks.document_jobs.rebuild_document_chunks（document create/update ETL）
+
+    纯函数语义：不碰 session、不读写 DB，只返回 Chunk 对象列表，
+    由调用方负责删旧 Chunk、add_all、commit。
+    """
+    chunks = chunk_text(cleaned_text)
+    if not chunks:
+        return []
+    embeddings = await get_embeddings(chunks)
+    return [
+        Chunk(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            chunk_index=idx,
+            content=chunk,
+            char_count=len(chunk),
+            embedding=embedding,
+        )
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+    ]

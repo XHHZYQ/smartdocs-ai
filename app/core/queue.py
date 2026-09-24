@@ -40,3 +40,20 @@ async def enqueue_document_job(doc_file_id: int) -> None:
         doc_file_id,
         _job_id=f"docfile:{doc_file_id}",
     )
+
+
+async def enqueue_rebuild_chunks(document_id: int) -> None:
+    """入队 document create/update 的切块+向量化任务。
+
+    _job_id 固定为 doc:{id}：
+    - 同一文档的未完成 ETL 重复入队时 arq 直接拒绝，防重复点击
+    - 终态后允许用同一 id 重新入队（手动重试 / 再次更新触发重建）
+    """
+    if arq_pool is None:
+        raise RuntimeError("arq pool is not initialized. Check lifespan.")
+
+    await arq_pool.enqueue_job(
+        "rebuild_document_chunks",
+        document_id,
+        _job_id=f"doc:{document_id}",
+    )

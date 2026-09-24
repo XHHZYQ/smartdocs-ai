@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from loguru import logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,47 +14,17 @@ from app.core.deps import (
     require_role,
 )
 from app.core.limiter import limiter
+from app.core.queue import enqueue_rebuild_chunks
 from app.core.response import EnvelopeRoute
 from app.models.chunk import Chunk
 from app.models.document import Document
-from app.models.document_file import DocumentFile
+from app.models.document_file import DocumentFile, ExtractionStatus
 from app.models.tenant import TenantRole
 from app.models.user import User
 from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
-from app.services.chunking import chunk_text
-from app.services.embedding import get_embeddings
 from app.services.extraction import clean_text
 
 router = APIRouter(prefix="/documents", tags=["documents"], route_class=EnvelopeRoute)
-
-
-async def _rebuild_chunks(
-    session: AsyncSession,
-    *,
-    document_id: int,
-    tenant_id: int,
-    cleaned_text: str,
-) -> None:
-    """删除旧 Chunk，按清洗后的文本重新切块 + 向量化并写入。"""
-    await session.exec(delete(Chunk).where(Chunk.document_id == document_id))
-
-    chunks = chunk_text(cleaned_text)
-    if not chunks:
-        return
-
-    embeddings = await get_embeddings(chunks)
-    chunk_records = [
-        Chunk(
-            tenant_id=tenant_id,
-            document_id=document_id,
-            chunk_index=idx,
-            content=chunk,
-            char_count=len(chunk),
-            embedding=embedding,
-        )
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
-    ]
-    session.add_all(chunk_records)
 
 
 # 创建文档
@@ -79,20 +50,25 @@ async def create_document(
         content=cleaned,
         owner_id=current_user.id,
         tenant_id=tenant_ctx.tenant_id,
+        # 入队后由 arq worker 翻 success/failed；接口立即返回 processing
+        processing_status=ExtractionStatus.PROCESSING,
     )
     session.add(doc)
     await session.flush()  # 拿到 doc.id，还没 commit
     await session.refresh(doc)
+    document_id = doc.id
 
-    await _rebuild_chunks(
-        session,
-        document_id=doc.id,
-        tenant_id=tenant_ctx.tenant_id,
-        cleaned_text=cleaned,
-    )
     await session.commit()
     await cache_delete_pattern(f"docs:list:tenant={tenant_ctx.tenant_id}:*")
     await session.refresh(doc)
+
+    # 入队切块+向量化。队列不可用不应让"创建"失败：记录已落库，状态 processing，
+    # 记日志，后续可手动触发重试（或前端轮询时发现仍 processing 由 retry 接口兜底）
+    try:
+        await enqueue_rebuild_chunks(document_id)
+    except Exception:
+        logger.exception("document {} 入队失败，可稍后调用 retry 接口", document_id)
+
     return doc
 
 
@@ -181,21 +157,25 @@ async def update_document(
         setattr(doc, field, value)
     doc.updated_at = datetime.now(UTC)
 
-    session.add(doc)
-
     # 只有正文变了才重建 Chunk；只改 title 不动向量库
     if content_changed:
-        await _rebuild_chunks(
-            session,
-            document_id=doc.id,
-            tenant_id=doc.tenant_id,
-            cleaned_text=doc.content,
-        )
+        # 翻 processing，由 arq worker 完成切块+向量化后翻 success/failed
+        doc.processing_status = ExtractionStatus.PROCESSING
+        doc.error_message = None
 
+    session.add(doc)
     await session.commit()
     # 更新文档后需要删除缓存，保持缓存一致性
     await cache_delete_pattern(f"docs:list:tenant={doc.tenant_id}:*")
     await session.refresh(doc)
+
+    # content 变了才入队；title-only 更新不入队
+    if content_changed:
+        try:
+            await enqueue_rebuild_chunks(document_id)
+        except Exception:
+            logger.exception("document {} 入队失败，可稍后调用 retry 接口", document_id)
+
     return doc
 
 
