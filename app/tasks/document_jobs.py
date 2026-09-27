@@ -174,6 +174,7 @@ async def rebuild_document_chunks(ctx: dict, document_id: int) -> None:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code >= 500:
                 await _handle_retryable_doc(session, document_id, job_try, exc)
+                return
             await _mark_doc_failed(session, document_id, exc)
         except Exception as exc:
             await _mark_doc_failed(session, document_id, exc)
