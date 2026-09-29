@@ -41,13 +41,23 @@ async def seeded(db_session, test_tenant_context, monkeypatch):
     tenant = test_tenant_context["tenant"]
     user = test_tenant_context["user"]
 
-    doc = Document(owner_id=user.id, tenant_id=tenant.id, title="检索测试文档")
+    doc = Document(
+        owner_id=user.id,
+        tenant_id=tenant.id,
+        title="检索测试文档",
+        content="检索测试文档的正文内容",
+    )
     other_tenant = Tenant(name="Other Tenant", slug="other-tenant")
     other_user = User(email="other@example.com", hashed_password=hash_password("Testpass123!"))
     db_session.add_all([doc, other_tenant, other_user])
     await db_session.flush()
 
-    other_doc = Document(owner_id=other_user.id, tenant_id=other_tenant.id, title="别家文档")
+    other_doc = Document(
+        owner_id=other_user.id,
+        tenant_id=other_tenant.id,
+        title="别家文档",
+        content="别家文档的正文内容",
+    )
     db_session.add(other_doc)
     await db_session.flush()
 
@@ -62,6 +72,11 @@ async def seeded(db_session, test_tenant_context, monkeypatch):
     await db_session.refresh(near)
     await db_session.refresh(far)
     await db_session.refresh(foreign)
+    # commit(expire_on_commit=True) 会让 tenant/user/doc 也过期，
+    # 测试里要同步读它们的 .id 等属性，必须重新加载，否则触发 MissingGreenlet
+    await db_session.refresh(tenant)
+    await db_session.refresh(user)
+    await db_session.refresh(doc)
 
     async def _fake_embeddings(texts: list[str]) -> list[list[float]]:
         assert texts == ["测试查询"]
