@@ -7,59 +7,81 @@
 - 每个测试后 truncate 所有表            ≈ beforeEach 清空数据库
 - dependency_overrides 覆盖 get_session ≈ Fastify 里 override decorate 的 db
 """
+import asyncio
+
 import httpx
 import pytest
 import pytest_asyncio
 from sqlmodel import SQLModel
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 import app.models  # noqa: F401 — 确保所有表注册到 metadata
-from app.core.db import engine, new_session
+import app.core.db as db_module
+from app.core.config import settings
+from app.core.db import new_session
 from app.core.security import create_access_token, hash_password
 from app.models.tenant import Tenant, TenantMembership, TenantRole
 from app.models.user import User
 
+# ===== 覆盖 engine: NullPool 不复用连接，每个 session 独占一个连接 =====
+# asyncpg 的连接池在 Windows + 多事件循环场景下有竞态，
+# NullPool 让 new_session() 每次创建新连接，session.close() 后彻底释放。
+db_module.engine = create_async_engine(
+    settings.database_url, poolclass=NullPool, echo=False
+)
+
 
 # ===== Session 级: 建表 / 销毁 =====
+# 用同步 fixture + asyncio.run() 绕开 pytest-asyncio 的 session/function 事件循环冲突。
+# pytest-asyncio 的 session 级 async fixture 在 Windows + Python 3.14 下会死锁，
+# 改为同步 fixture 在独立事件循环里运行 async 代码即可。
 
-@pytest_asyncio.fixture(scope="session")
-async def _create_tables():
-    """会话开始时建表，结束时删表。只跑一次。"""
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    yield
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
-    await engine.dispose()
+@pytest.fixture(scope="session")
+def _create_tables():
+    """会话开始时建表，结束时删表。只跑一次。
 
-
-# ===== Function 级: 每个测试后清空数据 =====
-
-@pytest_asyncio.fixture
-async def _clean_tables(_create_tables):
-    """每个测试跑完后 truncate 所有表，保证测试间数据隔离。
-
-    非 autouse: 只有请求了 db_session / app_client 的测试才会触发，
-    纯函数测试不碰 DB。_create_tables 是 session 级依赖，保证表已建好。
+    用独立 engine，不和 app.core.db.engine 共享连接池——
+    asyncio.run() 创建的连接池绑定到它的事件循环，
+    和 pytest-asyncio 的 function 级事件循环不兼容。
     """
+
+    async def _setup():
+        setup_engine = create_async_engine(
+            settings.database_url, poolclass=NullPool
+        )
+        async with setup_engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
+        await setup_engine.dispose()
+
+    async def _teardown():
+        teardown_engine = create_async_engine(
+            settings.database_url, poolclass=NullPool
+        )
+        async with teardown_engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.drop_all)
+        await teardown_engine.dispose()
+
+    asyncio.run(_setup())
     yield
-    async with engine.begin() as conn:
-        for table in reversed(SQLModel.metadata.sorted_tables):
-            await conn.execute(table.delete())
+    asyncio.run(_teardown())
 
 
-# ===== Function 级: DB session（给测试代码直接操作 DB 用）=====
+# ===== Function 级: DB session + 每测后清空 =====
 
 @pytest_asyncio.fixture
-async def db_session(_clean_tables) -> AsyncSession:
-    """给测试代码用的 session（比如 fixture 里建用户/租户）。
+async def db_session(_create_tables) -> AsyncSession:
+    """给测试代码用的 session。
 
-    依赖 _clean_tables → _create_tables，保证表已建好且每测后清空。
-    注意: API 路由用的 get_session 会自己从 engine 开 session，
-    不走这个 fixture。两者共享同一个测试 engine，数据互通。
+    依赖 _create_tables（session 级，保证表已建好）。
+    teardown 时在同一个 session 里 truncate 所有表，避免
+    多连接从同一个连接池取连接导致的 asyncpg 并发冲突。
     """
     session = new_session()
     yield session
+    for table in reversed(SQLModel.metadata.sorted_tables):
+        await session.execute(table.delete())
+    await session.commit()
     await session.close()
 
 
@@ -101,7 +123,7 @@ def _mock_queue(monkeypatch):
 # ===== Function 级: 异步测试客户端 =====
 
 @pytest_asyncio.fixture
-async def app_client(_clean_tables, fake_redis):
+async def app_client(db_session, fake_redis):
     """httpx AsyncClient，对应 supertest 的角色。
 
     ASGITransport 直接调用 ASGI app，不走真实 HTTP 端口。
