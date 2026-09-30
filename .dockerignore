@@ -1,0 +1,37 @@
+# Python 缓存/构建产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+
+# 本地虚拟环境、缓存
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 数据与日志（容器内自建，不拷主机数据）
+data/
+logs/
+
+# IDE/系统文件
+.vscode/
+.git/
+.gitignore
+.DS_Store
+
+# 本地 env 文件（敏感，不进镜像；生产 env 用 compose env_file 或 EC2 上独立放）
+.env
+.env.test
+.env.docker
+.env.prod
+
+# 文档/笔记
+*.md
+README.md
+
+# 测试不进镜像（runtime 不需要跑测试）
+tests/
+conftest.py

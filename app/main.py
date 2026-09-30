@@ -14,7 +14,16 @@ from app.core.queue import close_queue, init_queue
 from app.core.redis import close_redis, init_redis
 
 # from app.core.db import init_db
-from app.routers import auth, chat, debug, document_files, documents, search, tenant
+from app.routers import (
+    auth,
+    chat,
+    debug,
+    document_files,
+    documents,
+    health,
+    search,
+    tenant,
+)
 
 
 @asynccontextmanager
@@ -71,8 +80,4 @@ app.include_router(document_files.router)
 app.include_router(search.router)
 app.include_router(chat.router)
 app.include_router(tenant.router)
-
-
-@app.get("/")
-def read_root():
-    return {"status": "ok"}
+app.include_router(health.router)

@@ -13,4 +13,11 @@ logs/*.log
 # 上传文件落盘目录（阶段8 arq）
 data/
 
+# 容器编排敏感配置（JWT/API key 等真值）
+.env.docker
+.env.prod
+
+# 容器内日志（compose volume 持久化，不进 git）
+logs/
+
 .DS_Store

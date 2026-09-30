@@ -1,0 +1,145 @@
+# 本地一键起的完整开发栈：API + Worker + Postgres(pgvector) + Redis + Nginx
+# 生产 EC2 复用此文件，用 .env.prod 覆盖敏感配置 + 调整资源
+#
+# 启动：make up （或 docker compose up -d）
+# 验证：curl http://localhost/health
+#
+# 服务依赖链：
+#   postgres/redis 启动 → api readiness 通过 → nginx 起来
+#   worker 与 api 并行（worker 也依赖 postgres/redis，但不依赖 api）
+
+services:
+  # ===== 主库：pgvector =====
+  # 用 pgvector 官方镜像，自带 vector 扩展；init 脚本里 CREATE EXTENSION
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: smartdocs-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smartdocs
+      POSTGRES_PASSWORD: smartdocs
+      POSTGRES_DB: smartdocsdb
+    # pgvector 扩展在数据库首次启动时自动创建
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # 宿主 5433 避免本机已装的 postgres 冲突
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartdocs -d smartdocsdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - smartdocs-net
+
+  # ===== Redis：缓存 db0 + arq 队列 db1 =====
+  redis:
+    image: redis:7-alpine
+    container_name: smartdocs-redis
+    restart: unless-stopped
+    # 关掉持久化：缓存丢得起，省磁盘；arq 任务状态以 DB 为准
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - smartdocs-net
+
+  # ===== API 应用 =====
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartdocs-api
+    restart: unless-stopped
+    # 用 .env.docker 注入敏感配置（JWT/EMBEDDING_API_KEY）
+    # compose 的 environment 覆盖 DATABASE_URL/REDIS_URL 为 service name
+    env_file:
+      - .env.docker
+    environment:
+      # 容器间用 service name 通信，不能用 localhost
+      DATABASE_URL: postgresql+asyncpg://smartdocs:smartdocs@postgres:5432/smartdocsdb
+      REDIS_URL: redis://redis:6379/0
+      ARQ_REDIS_URL: redis://redis:6379/1
+      DEBUG: "false"
+      # upload_dir 用容器内绝对路径，挂 volume 持久化
+      UPLOAD_DIR: /app/data/uploads
+    volumes:
+      - uploads:/app/data/uploads
+      - app-logs:/app/logs
+    ports:
+      - "8000:8000"  # 直连调试用；生产走 nginx
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # 用 readiness：DB+Redis 都通才算健康
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - smartdocs-net
+
+  # ===== arq Worker：与 API 共用镜像，改 command =====
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartdocs-worker
+    restart: unless-stopped
+    # 覆盖 Dockerfile 的 CMD，跑 arq worker
+    # 不开 --watch：容器编排里文件不可变，无需热重载
+    command: ["arq", "app.tasks.worker.WorkerSettings"]
+    env_file:
+      - .env.docker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://smartdocs:smartdocs@postgres:5432/smartdocsdb
+      REDIS_URL: redis://redis:6379/0
+      ARQ_REDIS_URL: redis://redis:6379/1
+      DEBUG: "false"
+      UPLOAD_DIR: /app/data/uploads
+    volumes:
+      - uploads:/app/data/uploads
+      - app-logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smartdocs-net
+
+  # ===== Nginx 反代：80 端口入口，SSE 透传 =====
+  nginx:
+    image: nginx:alpine
+    container_name: smartdocs-nginx
+    restart: unless-stopped
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - smartdocs-net
+
+networks:
+  smartdocs-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  uploads:
+  app-logs:

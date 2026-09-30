@@ -1,0 +1,35 @@
+# 生产 EC2 override：覆盖 docker-compose.yml 的本地构建配置
+# 用法：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 关键差异：
+# - image: 从 ECR 拉，不 build
+# - 端口：API 不暴露给宿主（只 nginx 80 暴露）
+# - restart: always（生产环境任何崩溃都要自恢复）
+
+services:
+  api:
+    image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG:-latest}
+    restart: always
+    ports: []  # 不直接暴露 8000，只走 nginx
+    build: !reset null  # 不本地构建
+
+  worker:
+    image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG:-latest}
+    restart: always
+    build: !reset null
+
+  nginx:
+    restart: always
+    ports:
+      - "80:80"
+      # 未来加 SSL 证书后开 443
+      # - "443:443"
+
+  postgres:
+    # 生产用 RDS，本地不跑 postgres
+    # 这里 override 成 scale=0 或直接不启动，compose 用 profile 控制
+    profiles: ["local-only"]  # prod 部署不会启动
+
+  redis:
+    # 生产用 ElastiCache，本地不跑 redis
+    profiles: ["local-only"]

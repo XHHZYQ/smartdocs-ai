@@ -29,21 +29,34 @@ class InterceptHandler(logging.Handler):
 def setup_logging() -> None:
     logger.remove()  # 移除 loguru 默认 handler，自己重新配置
 
-    logger.add(
-        sys.stdout,
-        level="DEBUG" if settings.debug else "INFO",
-        colorize=True,
-        backtrace=True,
-        diagnose=settings.debug,  # 生产环境关掉，避免报错时把变量值打出去
-        format=(
-            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
-            "- <level>{message}</level>"
-        ),
-    )
+    if settings.debug:
+        # 开发：彩色 stdout，人眼友好
+        logger.add(
+            sys.stdout,
+            level="DEBUG",
+            colorize=True,
+            backtrace=True,
+            diagnose=True,
+            format=(
+                "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+                "<level>{level: <8}</level> | "
+                "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
+                "- <level>{message}</level>"
+            ),
+        )
+    else:
+        # 生产：JSON stdout，给 CloudWatch / ELK 采集
+        # serialize=True 输出单行 JSON：time/level/name/function/line/message/exception
+        logger.add(
+            sys.stdout,
+            level="INFO",
+            serialize=True,  # loguru 原生 JSON 序列化
+            backtrace=True,
+            diagnose=False,  # 生产环境关掉，避免报错时把变量值打出去
+        )
 
     # 落盘：按天切割，保留 14 天，自动 zip 压缩，方便以后排查线上问题
+    # 落盘始终走文本，方便人 grep；生产采集以 stdout JSON 为准
     logger.add(
         "logs/app_{time:YYYY-MM-DD}.log",
         level="INFO",
