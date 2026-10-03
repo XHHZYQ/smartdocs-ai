@@ -28,7 +28,7 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-@router.get("/readiness")
+@router.get("/readiness", response_model=None)
 async def readiness() -> JSONResponse | dict:
     """readiness：探 DB + Redis，任一不可用返回 503。"""
     checks: dict[str, str] = {}

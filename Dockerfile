@@ -1,13 +1,15 @@
-# syntax=docker/dockerfile:1.7
 # 多阶段构建：builder 装 uv 跑 sync，runtime 只拷 .venv + 必需源码
 # 一个镜像复用：API 和 Worker 共用，靠 entrypoint/command 区分角色
+#
+# 兼容性说明：不写死 --platform、不用 RUN --mount 缓存，
+# 经典构建器（无 buildx 的 colima）也能构建。
+# 目标平台在构建时决定：CI 用 buildx --platform linux/amd64，
+# 本地 M 芯片 Mac 构建 arm64（原生速度，不走 QEMU 模拟），EC2 原生即 amd64。
 
 # ===== Builder 阶段 =====
-# 指定 linux/amd64，让 Windows 开发机 buildx 也能产出 EC2 可用的镜像
-FROM --platform=linux/amd64 python:3.14-slim AS builder
+FROM python:3.14-slim AS builder
 
 # uv 官方推荐：拷贝独立二进制到 /usr/local/bin
-# 用 --mount 方式挂 cache，避免每次重装依赖都重下
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # uv 工作目录约定，与 runtime 保持一致避免路径变动
@@ -22,16 +24,21 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # --frozen：严格按 uv.lock 装，不解析；--no-dev：不装 dev 组
+# --no-install-project：只装第三方依赖，不把本项目打 wheel 安装
+#   （打 wheel 需要 README.md + app 源码，会破坏依赖层缓存；
+#    runtime 直接拷源码 + PYTHONPATH 运行，效果等价）
 # 出来的 /opt/venv 是独立环境，下一步直接拷
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --no-install-project
 
 # ===== Runtime 阶段 =====
-FROM --platform=linux/amd64 python:3.14-slim
+FROM python:3.14-slim
 
 # 运行时变量：日志不卡缓冲（loguru/uvicorn print 立即可见）
+# PYTHONPATH=/app：项目自身没装进 venv（--no-install-project），
+#   让 import app 找到 /app/app 源码（console_script 默认只把 bin 目录放上 sys.path）
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
     PATH="/opt/venv/bin:${PATH}"
 
 # 时区设为 Asia/Shanghai，日志时间戳与本地一致

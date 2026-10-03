@@ -57,6 +57,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # 构建产物打本地 tag，worker 直接复用同一镜像，避免经典构建器构建两遍
+    # （buildx 缺失时 api/worker 各自构建，日志里 Step 会重复一遍）
+    image: smartdocs-ai:local
     container_name: smartdocs-api
     restart: unless-stopped
     # 用 .env.docker 注入敏感配置（JWT/EMBEDDING_API_KEY）
@@ -93,9 +96,7 @@ services:
 
   # ===== arq Worker：与 API 共用镜像，改 command =====
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: smartdocs-ai:local
     container_name: smartdocs-worker
     restart: unless-stopped
     # 覆盖 Dockerfile 的 CMD，跑 arq worker
