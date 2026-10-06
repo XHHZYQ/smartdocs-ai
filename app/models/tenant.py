@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Column, DateTime, UniqueConstraint
 from sqlmodel import Field, SQLModel
@@ -15,7 +15,7 @@ class Tenant(SQLModel, table=True):
     )
 
 
-class TenantRole(str, Enum):
+class TenantRole(StrEnum):
     OWNER = "owner"  # 租户创建者,唯一能删除租户/转让所有权
     ADMIN = "admin"  # 能管理成员、改租户设置
     MEMBER = "member"  # 能读写业务资源(文档、会话)

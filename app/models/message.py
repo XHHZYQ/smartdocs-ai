@@ -1,11 +1,11 @@
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
 
 
-class MessageRole(str, Enum):
+class MessageRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
 

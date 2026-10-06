@@ -1,18 +1,18 @@
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer
 from sqlmodel import Field, SQLModel
 
 
-class SourceType(str, Enum):
+class SourceType(StrEnum):
     """上传文件的来源类型"""
 
     PDF = "pdf"
     MARKDOWN = "markdown"
 
 
-class ExtractionStatus(str, Enum):
+class ExtractionStatus(StrEnum):
     """文本提取处理的状态机：pending -> processing -> success / failed"""
 
     PENDING = "pending"
