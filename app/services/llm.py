@@ -1,5 +1,5 @@
-import json
 import codecs
+import json
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -15,7 +15,7 @@ class LLMServiceError(Exception):
         super().__init__(message)
 
 
-async def stream_chat(messages: list[dict[str, str]]) -> AsyncGenerator[str, None]:
+async def stream_chat(messages: list[dict[str, str]]) -> AsyncGenerator[str]:
     """流式调用 Chat Completions 接口，逐段文本 yield 出去。
     调用方用 `async for text in stream_chat(...)` 消费，而不是 await 一次性拿结果。
     """

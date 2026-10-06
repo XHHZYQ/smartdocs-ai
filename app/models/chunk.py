@@ -1,8 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, DateTime, ForeignKey, Integer
 from sqlmodel import Field, SQLModel
-from pgvector.sqlalchemy import Vector
+
 from app.core.config import settings
 
 
@@ -26,6 +27,6 @@ class Chunk(SQLModel, table=True):
         sa_column=Column(Vector(settings.embedding_dimensions), nullable=True),
     )
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )

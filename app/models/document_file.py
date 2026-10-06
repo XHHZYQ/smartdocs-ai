@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer
@@ -52,6 +52,6 @@ class DocumentFile(SQLModel, table=True):
     owner_id: int = Field(foreign_key="user.id", nullable=True, index=True)
     tenant_id: int = Field(foreign_key="tenant.id", nullable=False, index=True)
     uploaded_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )

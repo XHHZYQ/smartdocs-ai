@@ -4,7 +4,7 @@
 JWT 签发/校验走真实 jwt 库（测试 .env.test 里配了固定 secret_key）。
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -18,7 +18,6 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-
 
 # ===== 密码哈希 =====
 
@@ -72,7 +71,7 @@ class TestAccessToken:
 
     def test_expired_token_raises(self):
         """手动构造已过期的 token"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": "1",
             "type": "access",
@@ -90,8 +89,8 @@ class TestAccessToken:
         payload = {
             "sub": "1",
             "type": "access",
-            "iat": datetime.now(timezone.utc),
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
         }
         bad_token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
         with pytest.raises(InvalidTokenError):

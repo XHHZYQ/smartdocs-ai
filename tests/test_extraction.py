@@ -5,9 +5,8 @@
 
 import pytest
 
-from app.services.extraction import clean_text, extract_text
 from app.models.document_file import SourceType
-
+from app.services.extraction import clean_text, extract_text
 
 # ===== clean_text =====
 
@@ -61,7 +60,7 @@ class TestCleanText:
 
 class TestExtractMarkdownText:
     def test_valid_utf8(self):
-        raw = "你好，世界".encode("utf-8")
+        raw = "你好，世界".encode()
         result = extract_text(SourceType.MARKDOWN, raw)
         assert result == "你好，世界"
 

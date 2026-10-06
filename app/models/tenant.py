@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 
 from sqlalchemy import Column, DateTime, UniqueConstraint
@@ -10,7 +10,7 @@ class Tenant(SQLModel, table=True):
     name: str = Field(max_length=255, nullable=False)
     slug: str = Field(max_length=100, unique=True, index=True, nullable=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
@@ -36,6 +36,6 @@ class TenantMembership(SQLModel, table=True):
     tenant_id: int = Field(foreign_key="tenant.id", nullable=False, index=True)
     role: TenantRole = Field(nullable=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )

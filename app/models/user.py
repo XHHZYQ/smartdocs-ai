@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
@@ -9,6 +9,6 @@ class User(SQLModel, table=True):
     email: str = Field(max_length=255, unique=True, index=True, nullable=False)
     hashed_password: str = Field(nullable=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )

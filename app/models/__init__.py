@@ -12,7 +12,11 @@ migrations）都应该 `import app.models` 一次，确保全部表注册到位�
 from app.models.chunk import Chunk  # noqa: F401
 from app.models.conversation import Conversation  # noqa: F401
 from app.models.document import Document  # noqa: F401
-from app.models.document_file import DocumentFile, ExtractionStatus, SourceType  # noqa: F401
+from app.models.document_file import (  # noqa: F401
+    DocumentFile,
+    ExtractionStatus,
+    SourceType,
+)
 from app.models.message import Message, MessageRole  # noqa: F401
 from app.models.tenant import Tenant, TenantMembership, TenantRole  # noqa: F401
 from app.models.user import User  # noqa: F401

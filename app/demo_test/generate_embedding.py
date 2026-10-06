@@ -4,8 +4,10 @@ import random
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.db import engine
-from app.models.document import Document  # noqa: F401  # 必须 import 才能让 Chunk 的外键正确解析到 document 表
 from app.models.chunk import Chunk
+from app.models.document import (
+    Document,  # noqa: F401  # 必须 import 才能让 Chunk 的外键正确解析到 document 表
+)
 
 
 async def seed_fake_chunks(count: int = 5000):

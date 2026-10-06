@@ -3,7 +3,7 @@
 纯函数测试，不依赖 DB / Redis / 外部 API。
 """
 
-from app.services.prompt import SYSTEM_PROMPT, _MAX_CONTEXT_CHARS, build_messages
+from app.services.prompt import SYSTEM_PROMPT, build_messages
 
 
 class TestBuildMessages:

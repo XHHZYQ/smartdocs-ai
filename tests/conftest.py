@@ -13,12 +13,12 @@ import asyncio
 import httpx
 import pytest
 import pytest_asyncio
-from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from sqlmodel import SQLModel
 
-import app.models  # noqa: F401 — 确保所有表注册到 metadata
 import app.core.db as db_module
+import app.models  # noqa: F401 — 确保所有表注册到 metadata
 from app.core.config import settings
 from app.core.db import new_session
 from app.core.security import create_access_token, hash_password
@@ -95,6 +95,7 @@ async def fake_redis():
     get_redis() 返回 redis_client，所以只要设好 redis_client 就行。
     """
     import fakeredis
+
     import app.core.redis
 
     fake = fakeredis.FakeAsyncRedis(decode_responses=True)

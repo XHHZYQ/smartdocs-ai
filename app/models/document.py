@@ -1,13 +1,13 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, DateTime
+from sqlmodel import Field, SQLModel
 
 from app.models.document_file import ExtractionStatus
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # 文档表，文档的基本信息和内容，以及关联关系
@@ -25,10 +25,10 @@ class Document(SQLModel, table=True):
     )
     error_message: str | None = Field(default=None, nullable=True)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )

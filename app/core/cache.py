@@ -1,7 +1,6 @@
 import json
 from typing import Any
 
-import redis.asyncio as redis
 from loguru import logger
 
 from app.core.redis import get_redis

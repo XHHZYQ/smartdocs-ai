@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
-from loguru import logger
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import delete, select, update
 

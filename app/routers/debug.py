@@ -1,7 +1,7 @@
-from fastapi import Depends
-from app.core.redis import get_redis
 import redis.asyncio as redis
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.core.redis import get_redis
 
 router = APIRouter()
 

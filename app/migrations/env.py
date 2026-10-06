@@ -1,26 +1,25 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
-
 # 1. target_metadata 指向 SQLModel 的元数据
 from sqlmodel import SQLModel
+
 from app.core.config import settings
+from app.models.chunk import Chunk  # noqa: F401
+from app.models.conversation import Conversation  # noqa: F401
 
 # 关键：必须 import 所有的模型模块，哪怕看起来没用到
 # 否则模型不会注册进 SQLModel.metadata，autogenerate 会检测不到表
 from app.models.document import Document  # noqa: F401
-from app.models.user import User  # noqa: F401
 from app.models.document_file import DocumentFile  # noqa: F401
-from app.models.chunk import Chunk  # noqa: F401
 from app.models.message import Message  # noqa: F401
-from app.models.conversation import Conversation  # noqa: F401
 from app.models.tenant import Tenant  # noqa: F401
-
+from app.models.user import User  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

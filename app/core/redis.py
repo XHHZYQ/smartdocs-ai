@@ -1,4 +1,3 @@
-from collections.abc import AsyncGenerator
 
 import redis.asyncio as redis
 from loguru import logger
