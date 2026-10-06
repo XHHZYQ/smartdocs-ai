@@ -1,5 +1,5 @@
 """临时验证脚本:验证限流是否生效。验证后可删。"""
-
+import time
 import traceback
 
 from fastapi.testclient import TestClient
@@ -10,7 +10,6 @@ from app.main import app
 client = TestClient(app)
 
 print("=== /auth/register 限流测试 (limit=5/minute, IP 维度) ===")
-import time
 
 prefix = f"rt{int(time.time())}"
 for i in range(1, 8):

@@ -48,10 +48,12 @@ dev = [
 [tool.ruff]
 line-length = 88
 target-version = "py314"
+fix = true
+unsafe-fixes = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]  # 常见错误、未使用变量、import 排序、语法升级建议
-ignore = []
+ignore = ["E501"]  # 忽略 line too long
 
 [tool.ruff.format]
 quote-style = "double"
