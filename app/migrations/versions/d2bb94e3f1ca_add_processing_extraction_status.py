@@ -5,6 +5,7 @@ Revises: 8c02509226fc
 Create Date: 2026-09-23 15:16:45.004143
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -13,8 +14,8 @@ import sqlmodel
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'd2bb94e3f1ca'
-down_revision: Union[str, Sequence[str], None] = '8c02509226fc'
+revision: str = "d2bb94e3f1ca"
+down_revision: Union[str, Sequence[str], None] = "8c02509226fc"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -39,9 +40,7 @@ def downgrade() -> None:
         "WHERE extraction_status::text = 'PROCESSING'"
     )
     op.execute("ALTER TYPE extractionstatus RENAME TO extractionstatus_old")
-    op.execute(
-        "CREATE TYPE extractionstatus AS ENUM ('PENDING', 'SUCCESS', 'FAILED')"
-    )
+    op.execute("CREATE TYPE extractionstatus AS ENUM ('PENDING', 'SUCCESS', 'FAILED')")
     op.execute(
         "ALTER TABLE documentfile "
         "ALTER COLUMN extraction_status TYPE extractionstatus "

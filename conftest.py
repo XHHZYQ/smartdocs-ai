@@ -3,6 +3,7 @@
 pydantic-settings 优先级: env vars > .env file > defaults
 所以这里设置的环境变量会覆盖 .env 里的同名值，确保测试用独立的数据库/配置。
 """
+
 import os
 from pathlib import Path
 

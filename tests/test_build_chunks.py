@@ -4,6 +4,7 @@ get_embeddings 在 import 时已绑定到 chunking 模块命名空间，
 所以 patch 的是 app.services.chunking.get_embeddings（不是定义处）。
 纯内存操作，不碰 DB。
 """
+
 import pytest
 
 from app.services.chunking import build_chunk_records, chunk_text
@@ -33,7 +34,9 @@ class TestBuildChunkRecords:
         text = "第一段。\n\n第二段。\n\n第三段。"
         expected_chunks = chunk_text(text)
 
-        records = await build_chunk_records(tenant_id=7, document_id=42, cleaned_text=text)
+        records = await build_chunk_records(
+            tenant_id=7, document_id=42, cleaned_text=text
+        )
 
         assert len(records) == len(expected_chunks) > 0
         for idx, (record, chunk) in enumerate(zip(records, expected_chunks)):

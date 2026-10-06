@@ -7,6 +7,7 @@
 - 每个测试后 truncate 所有表            ≈ beforeEach 清空数据库
 - dependency_overrides 覆盖 get_session ≈ Fastify 里 override decorate 的 db
 """
+
 import asyncio
 
 import httpx
@@ -37,6 +38,7 @@ db_module.engine = create_async_engine(
 # pytest-asyncio 的 session 级 async fixture 在 Windows + Python 3.14 下会死锁，
 # 改为同步 fixture 在独立事件循环里运行 async 代码即可。
 
+
 @pytest.fixture(scope="session")
 def _create_tables():
     """会话开始时建表，结束时删表。只跑一次。
@@ -47,17 +49,13 @@ def _create_tables():
     """
 
     async def _setup():
-        setup_engine = create_async_engine(
-            settings.database_url, poolclass=NullPool
-        )
+        setup_engine = create_async_engine(settings.database_url, poolclass=NullPool)
         async with setup_engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
         await setup_engine.dispose()
 
     async def _teardown():
-        teardown_engine = create_async_engine(
-            settings.database_url, poolclass=NullPool
-        )
+        teardown_engine = create_async_engine(settings.database_url, poolclass=NullPool)
         async with teardown_engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.drop_all)
         await teardown_engine.dispose()
@@ -68,6 +66,7 @@ def _create_tables():
 
 
 # ===== Function 级: DB session + 每测后清空 =====
+
 
 @pytest_asyncio.fixture
 async def db_session(_create_tables) -> AsyncSession:
@@ -86,6 +85,7 @@ async def db_session(_create_tables) -> AsyncSession:
 
 
 # ===== Function 级: Redis mock =====
+
 
 @pytest_asyncio.fixture
 async def fake_redis():
@@ -106,6 +106,7 @@ async def fake_redis():
 
 # ===== Function 级 autouse: arq 入队 no-op =====
 
+
 @pytest.fixture(autouse=True)
 def _mock_queue(monkeypatch):
     """把 arq 入队函数替换成 async no-op，避免测试连真实 Redis。
@@ -113,6 +114,7 @@ def _mock_queue(monkeypatch):
     路由模块在 import 时就把函数名绑定到了自己的命名空间，
     所以必须 patch 路由模块里的引用，而不是 app.core.queue 里的原始定义。
     """
+
     async def _noop(*args, **kwargs):
         return None
 
@@ -121,6 +123,7 @@ def _mock_queue(monkeypatch):
 
 
 # ===== Function 级: 异步测试客户端 =====
+
 
 @pytest_asyncio.fixture
 async def app_client(db_session, fake_redis):
@@ -140,6 +143,7 @@ async def app_client(db_session, fake_redis):
 
 
 # ===== Function 级: 认证 fixture =====
+
 
 @pytest_asyncio.fixture
 async def test_tenant_context(db_session):
@@ -187,7 +191,9 @@ async def auth_headers_no_tenant(db_session):
 
     创建一个用户但不关联任何租户，签发的 token 不带 tid/role claim。
     """
-    user = User(email="notenant@example.com", hashed_password=hash_password("Testpass123!"))
+    user = User(
+        email="notenant@example.com", hashed_password=hash_password("Testpass123!")
+    )
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)

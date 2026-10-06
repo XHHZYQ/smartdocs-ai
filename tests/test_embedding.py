@@ -3,6 +3,7 @@
 对应 Fastify 生态里的 nock / msw：respx 拦截 httpx 请求，
 不真正调用 SiliconFlow API，测试完全确定性、无网络开销。
 """
+
 import json
 
 import httpx
@@ -71,7 +72,9 @@ class TestGetEmbeddings:
         body = json.loads(request.content)
         assert body["model"] == settings.embedding_model
         assert body["input"] == ["hello"]
-        assert request.headers["Authorization"] == f"Bearer {settings.embedding_api_key}"
+        assert (
+            request.headers["Authorization"] == f"Bearer {settings.embedding_api_key}"
+        )
 
     @respx.mock
     async def test_http_error_propagates(self):

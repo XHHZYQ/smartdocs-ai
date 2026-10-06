@@ -3,6 +3,7 @@
 纯函数测试，不依赖 DB / Redis / 外部 API。
 JWT 签发/校验走真实 jwt 库（测试 .env.test 里配了固定 secret_key）。
 """
+
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -20,6 +21,7 @@ from app.core.security import (
 
 
 # ===== 密码哈希 =====
+
 
 class TestPasswordHashing:
     def test_hash_and_verify_correct(self):
@@ -44,6 +46,7 @@ class TestPasswordHashing:
 
 # ===== Access Token =====
 
+
 class TestAccessToken:
     def test_encode_and_decode(self):
         token = create_access_token(user_id=42)
@@ -54,9 +57,7 @@ class TestAccessToken:
         assert "exp" in payload
 
     def test_with_tenant_claims(self):
-        token = create_access_token(
-            user_id=1, tenant_id=10, role="owner"
-        )
+        token = create_access_token(user_id=1, tenant_id=10, role="owner")
         payload = decode_token(token)
         assert payload["sub"] == "1"
         assert payload["type"] == "access"
@@ -98,6 +99,7 @@ class TestAccessToken:
 
 
 # ===== Refresh Token =====
+
 
 class TestRefreshToken:
     def test_encode_and_decode(self):

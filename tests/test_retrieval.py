@@ -8,6 +8,7 @@ get_embeddings 用 monkeypatch 替换成确定性向量，避免真实 API 调�
 - embedding 首位 = 1.0 → 余弦距离 0（完全一致）
 - embedding 首位 = 0.0 → 余弦距离 1（正交）
 """
+
 import math
 
 import pytest_asyncio
@@ -48,7 +49,9 @@ async def seeded(db_session, test_tenant_context, monkeypatch):
         content="检索测试文档的正文内容",
     )
     other_tenant = Tenant(name="Other Tenant", slug="other-tenant")
-    other_user = User(email="other@example.com", hashed_password=hash_password("Testpass123!"))
+    other_user = User(
+        email="other@example.com", hashed_password=hash_password("Testpass123!")
+    )
     db_session.add_all([doc, other_tenant, other_user])
     await db_session.flush()
 
@@ -61,12 +64,30 @@ async def seeded(db_session, test_tenant_context, monkeypatch):
     db_session.add(other_doc)
     await db_session.flush()
 
-    near = Chunk(tenant_id=tenant.id, document_id=doc.id, chunk_index=0,
-                 content="最近的块", char_count=4, embedding=vec(1.0))
-    far = Chunk(tenant_id=tenant.id, document_id=doc.id, chunk_index=1,
-                content="较远的块", char_count=4, embedding=vec(0.0))
-    foreign = Chunk(tenant_id=other_tenant.id, document_id=other_doc.id, chunk_index=0,
-                    content="别家租户的块", char_count=6, embedding=vec(1.0))
+    near = Chunk(
+        tenant_id=tenant.id,
+        document_id=doc.id,
+        chunk_index=0,
+        content="最近的块",
+        char_count=4,
+        embedding=vec(1.0),
+    )
+    far = Chunk(
+        tenant_id=tenant.id,
+        document_id=doc.id,
+        chunk_index=1,
+        content="较远的块",
+        char_count=4,
+        embedding=vec(0.0),
+    )
+    foreign = Chunk(
+        tenant_id=other_tenant.id,
+        document_id=other_doc.id,
+        chunk_index=0,
+        content="别家租户的块",
+        char_count=6,
+        embedding=vec(1.0),
+    )
     db_session.add_all([near, far, foreign])
     await db_session.commit()
     await db_session.refresh(near)
@@ -89,13 +110,17 @@ async def seeded(db_session, test_tenant_context, monkeypatch):
 
 class TestRetrieveChunks:
     async def test_orders_by_distance(self, db_session, seeded):
-        results = await retrieve_chunks(db_session, seeded["tenant"].id, "测试查询", top_k=5)
+        results = await retrieve_chunks(
+            db_session, seeded["tenant"].id, "测试查询", top_k=5
+        )
 
         assert [row[0].id for row in results] == [seeded["near"].id, seeded["far"].id]
 
     async def test_row_shape(self, db_session, seeded):
         """返回 (Chunk, document_title, distance) 三元组。"""
-        results = await retrieve_chunks(db_session, seeded["tenant"].id, "测试查询", top_k=5)
+        results = await retrieve_chunks(
+            db_session, seeded["tenant"].id, "测试查询", top_k=5
+        )
 
         chunk, title, distance = results[0]
         assert chunk.id == seeded["near"].id
@@ -104,13 +129,17 @@ class TestRetrieveChunks:
 
     async def test_tenant_isolation(self, db_session, seeded):
         """其他租户的 chunk 永远不可见，即使向量距离更近。"""
-        results = await retrieve_chunks(db_session, seeded["tenant"].id, "测试查询", top_k=10)
+        results = await retrieve_chunks(
+            db_session, seeded["tenant"].id, "测试查询", top_k=10
+        )
 
         ids = [row[0].id for row in results]
         assert seeded["foreign"].id not in ids
 
     async def test_top_k_limit(self, db_session, seeded):
-        results = await retrieve_chunks(db_session, seeded["tenant"].id, "测试查询", top_k=1)
+        results = await retrieve_chunks(
+            db_session, seeded["tenant"].id, "测试查询", top_k=1
+        )
 
         assert len(results) == 1
         assert results[0][0].id == seeded["near"].id

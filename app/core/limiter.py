@@ -8,6 +8,7 @@ key_func 必须是同步函数(因为 slowapi 内部会 await 它),不能 Depend
 所以这里直接从 Authorization header 同步解析 JWT 拿 user_id,
 解析失败(未登录/格式错)就回退到 IP 维度。
 """
+
 import jwt
 from fastapi import Request
 from slowapi import Limiter

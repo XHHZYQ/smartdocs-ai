@@ -2,6 +2,7 @@
 
 纯函数测试，不依赖 DB / Redis。
 """
+
 from app.core.cache import build_cache_key
 
 

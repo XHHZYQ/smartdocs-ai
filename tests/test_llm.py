@@ -3,6 +3,7 @@
 respx 支持 content 为字节迭代器，天然模拟流式响应；
 还可以把字节切成任意边界，验证增量解码器处理跨 chunk 的 JSON。
 """
+
 import httpx
 import pytest
 import respx
@@ -106,6 +107,7 @@ class TestStreamChatSuccess:
         await _collect(stream_chat(messages))
 
         import json
+
         body = json.loads(route.calls.last.request.content)
         assert body["model"] == settings.chat_model
         assert body["messages"] == messages

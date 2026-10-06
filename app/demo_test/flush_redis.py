@@ -1,4 +1,5 @@
 """Flush all Redis keys (for testing rate limit)."""
+
 import asyncio
 
 import redis.asyncio as r

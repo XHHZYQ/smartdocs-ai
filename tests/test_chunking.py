@@ -2,6 +2,7 @@
 
 纯函数测试，不依赖 DB / Redis / 外部 API。
 """
+
 from app.services.chunking import (
     _split_into_paragraphs,
     _split_long_paragraph,
@@ -10,6 +11,7 @@ from app.services.chunking import (
 
 
 # ===== _split_into_paragraphs =====
+
 
 class TestSplitIntoParagraphs:
     def test_normal_paragraphs(self):
@@ -40,6 +42,7 @@ class TestSplitIntoParagraphs:
 
 # ===== _split_long_paragraph =====
 
+
 class TestSplitLongParagraph:
     def test_basic_split(self):
         """超长段落按 chunk_size 切分，带 overlap"""
@@ -67,6 +70,7 @@ class TestSplitLongParagraph:
 
 
 # ===== chunk_text（集成）=====
+
 
 class TestChunkText:
     def test_empty_text(self):

@@ -2,6 +2,7 @@
 
 纯函数测试，不依赖 DB / Redis / 外部 API。
 """
+
 import pytest
 
 from app.services.extraction import clean_text, extract_text
@@ -9,6 +10,7 @@ from app.models.document_file import SourceType
 
 
 # ===== clean_text =====
+
 
 class TestCleanText:
     def test_normalize_crlf(self):
@@ -56,6 +58,7 @@ class TestCleanText:
 
 # ===== _extract_markdown_text =====
 
+
 class TestExtractMarkdownText:
     def test_valid_utf8(self):
         raw = "你好，世界".encode("utf-8")
@@ -73,6 +76,7 @@ class TestExtractMarkdownText:
 
 
 # ===== extract_text dispatch =====
+
 
 class TestExtractTextDispatch:
     def test_markdown_dispatch(self):

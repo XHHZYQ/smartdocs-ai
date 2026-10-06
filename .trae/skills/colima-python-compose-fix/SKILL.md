@@ -75,8 +75,7 @@ FastAPI 从返回类型注解推导响应模型；**Response 子类（JSONRespon
 
 ```python
 @router.get("/readiness", response_model=None)
-async def readiness() -> JSONResponse | dict:
-    ...
+async def readiness() -> JSONResponse | dict: ...
 ```
 
 固定模式：**返回联合类型中出现 Response 子类时，装饰器加 `response_model=None`**。

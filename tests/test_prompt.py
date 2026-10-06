@@ -2,6 +2,7 @@
 
 纯函数测试，不依赖 DB / Redis / 外部 API。
 """
+
 from app.services.prompt import SYSTEM_PROMPT, _MAX_CONTEXT_CHARS, build_messages
 
 
@@ -67,7 +68,7 @@ class TestBuildMessages:
     def test_truncation_is_whole_chunk_not_partial(self):
         """超过阈值的 chunk 整块丢弃，不做部分截断"""
         chunk_a = "a" * 2900  # 刚好不到 3000
-        chunk_b = "b" * 200   # 2900 + 200 = 3100 > 3000 → 整块丢
+        chunk_b = "b" * 200  # 2900 + 200 = 3100 > 3000 → 整块丢
         messages = build_messages("q", [chunk_a, chunk_b])
         user_content = messages[-1]["content"]
         assert "[1]" in user_content

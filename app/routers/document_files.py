@@ -181,9 +181,7 @@ async def upload_document_file(
         logger.exception("doc_file {} 入队失败，可稍后调用 retry 接口", doc_file_id)
 
     # 4. 列表新增了记录，失效列表缓存
-    await cache_delete_pattern(
-        f"docfiles:list:tenant={tenant_ctx.tenant_id}:*"
-    )
+    await cache_delete_pattern(f"docfiles:list:tenant={tenant_ctx.tenant_id}:*")
     return doc_file
 
 
@@ -222,8 +220,6 @@ async def retry_document_file(
 
     # 终态后固定 job_id 可重新入队；入队失败抛出让统一异常处理器兜底（本次是显式重试操作）
     await enqueue_document_job(doc_file_id)
-    await cache_delete_pattern(
-        f"docfiles:list:tenant={tenant_ctx.tenant_id}:*"
-    )
+    await cache_delete_pattern(f"docfiles:list:tenant={tenant_ctx.tenant_id}:*")
     await session.refresh(doc_file)
     return doc_file
