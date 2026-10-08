@@ -130,20 +130,20 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-          const token = await core.getIDToken('sts.amazonaws.com');
-          const payload = JSON.parse(
-            Buffer.from(token.split('.')[1], 'base64url').toString()
-          );
-          console.log(JSON.stringify({
-            iss: payload.iss,
-            aud: payload.aud,
-            sub: payload.sub,
-            repository: payload.repository,
-            repository_id: payload.repository_id,
-            repository_owner: payload.repository_owner,
-            repository_owner_id: payload.repository_owner_id,
-            ref: payload.ref
-          }, null, 2));
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const payload = JSON.parse(
+              Buffer.from(token.split('.')[1], 'base64url').toString()
+            );
+            console.log(JSON.stringify({
+              iss: payload.iss,
+              aud: payload.aud,
+              sub: payload.sub,
+              repository: payload.repository,
+              repository_id: payload.repository_id,
+              repository_owner: payload.repository_owner,
+              repository_owner_id: payload.repository_owner_id,
+              ref: payload.ref
+            }, null, 2));
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
