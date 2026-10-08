@@ -10,13 +10,23 @@ services:
   api:
     image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG:-latest}
     restart: always
-    ports: []  # 不直接暴露 8000，只走 nginx
-    build: !reset null  # 不本地构建
+    ports: []
+    build: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      ARQ_REDIS_URL: ${ARQ_REDIS_URL}
+    depends_on: []
 
   worker:
     image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG:-latest}
     restart: always
     build: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      ARQ_REDIS_URL: ${ARQ_REDIS_URL}
+    depends_on: []
 
   nginx:
     restart: always

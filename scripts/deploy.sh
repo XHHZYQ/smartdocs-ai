@@ -8,6 +8,9 @@
 # - EC2 实例角色有 ECR 拉镜像权限（ecr:GetDownloadUrlForLayer / ecr:BatchGetImage）
 # - 已 docker login 过 ECR（user-data 里跑一次 aws ecr get-login-password | docker login）
 
+: "${ECR_REGISTRY:?Set ECR_REGISTRY before running deploy.sh}"
+: "${ECR_REPO:?Set ECR_REPO before running deploy.sh}"
+
 set -euo pipefail
 
 APP_DIR="/opt/smartdocs"
