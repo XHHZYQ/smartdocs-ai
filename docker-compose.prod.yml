@@ -16,7 +16,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       ARQ_REDIS_URL: ${ARQ_REDIS_URL}
-    depends_on: []
+    depends_on: !reset null
 
   worker:
     image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG:-latest}
@@ -26,7 +26,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       ARQ_REDIS_URL: ${ARQ_REDIS_URL}
-    depends_on: []
+    depends_on: !reset null
 
   nginx:
     restart: always
