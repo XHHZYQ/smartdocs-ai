@@ -2,7 +2,7 @@
 # EC2 user-data 模板：实例首次启动时自动执行
 # 职责：装 Docker + 拉项目代码 + 配置 ECR 登录 + 首次启动服务
 #
-# 使用方式：
+# 使用方式
 # 1. 创建 EC2 时把这个文件作为 user-data 贴入
 # 2. 实例角色需要附加权限：
 #    - AmazonEC2ContainerRegistryReadOnly（拉 ECR 镜像）
