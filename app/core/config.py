@@ -9,7 +9,8 @@ class Settings(BaseSettings):
         # mac 安装的是命令行版本，不是docker版本
         "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb"
     )
-    jwt_secret_key: str = "dev-only-change-me"  # 生产环境务必用 .env 覆盖
+    # 生成 jwt_secret_key：python -c "import os; print(os.urandom(32).hex())"
+    jwt_secret_key: str = "5d71e2ef8005d55e3277359c96786c3a7e2e53cc9f6476807e5f19723266dcc8"  # 生产环境务必用 .env 覆盖
     jwt_algorithm: str = "HS256"
     # access_token_expire_minutes: int = 60 # 正式环境需恢复
     access_token_expire_minutes: int = 60 * 24

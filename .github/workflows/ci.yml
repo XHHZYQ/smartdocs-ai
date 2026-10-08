@@ -1,201 +1,160 @@
-# SmartDocs CI: lint → test → build → 推 ECR（仅 main）
-#
-# 设计要点：
-# - lint/test 在 PR 上跑，质量门禁
-# - build+push 只在 main 分支跑，避免每个 PR 都构建镜像
-# - test 需要 PostgreSQL（pgvector）作为 service container
-#   conftest.py 直接用真实 DB 建表，不用 mock
-# - build 用 buildx linux/amd64，给 EC2 用
-# - 推 ECR 用 OIDC 无密钥认证（避免在 GitHub 配长期 AWS access key）
+name: CI/CD
 
-name: CI
+# 一个文件管全流程：
+#   PR / 任意分支 push  → 只跑 test
+#   main 分支 push      → test → 构建推送 GHCR → SSH 部署到 EC2
+#
+# 没有 lint 环节（ruff 不进 CI），要跑自己在本地 uv run ruff check .
 
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
-
-# 同分支并发时取消旧 run，省 CI 资源
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 env:
-  PYTHON_VERSION: "3.14"
+  REGISTRY: ghcr.io
 
 jobs:
-  # ===== lint：ruff check + format check =====
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: uv sync --frozen --all-extras
-
-      - name: Ruff check
-        run: uv run ruff check .
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-  # ===== test：pytest + PostgreSQL pgvector service container =====
+  # ==================== 1. 测试 ====================
   test:
-    name: Test
+    name: 测试
     runs-on: ubuntu-latest
-    needs: lint  # lint 不过不浪费资源跑 test
 
-    # 用 service container 起 pgvector
-    # 等价于本地 docker run pgvector/pgvector:pg16
     services:
       postgres:
         image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: smartdocs
           POSTGRES_PASSWORD: smartdocs
-          POSTGRES_DB: smartdocs_test
-        ports:
-          - 5432:5432
-        # service container 没法挂 init.sql，这里用命令行建扩展
+          POSTGRES_DB: smartdocsdb
+        ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U smartdocs -d smartdocs_test"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
+          --health-cmd "pg_isready -U smartdocs -d smartdocsdb"
+          --health-interval 10s --health-timeout 5s --health-retries 10
 
-    env:
-      DATABASE_URL: postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocs_test
-      REDIS_URL: redis://localhost:6379/0
-      ARQ_REDIS_URL: redis://localhost:6379/1
-      JWT_SECRET_KEY: ci-test-only
-      EMBEDDING_API_KEY: test-fake-key
-      RATE_LIMIT_ENABLED: "false"
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          enable-cache: true
 
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: 安装依赖
+        run: uv sync --frozen
 
-      - name: Install dependencies
-        run: uv sync --frozen --all-extras
+      - name: pytest
+        run: uv run pytest -q
+        env:
+          DATABASE_URL: postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb
+          REDIS_URL: redis://localhost:6379/0
+          ARQ_REDIS_URL: redis://localhost:6379/1
+          JWT_SECRET_KEY: 5d71e2ef8005d55e3277359c96786c3a7e2e53cc9f6476807e5f19723266dcc8
+          EMBEDDING_API_KEY: ci-only-key
+          EMBEDDING_BASE_URL: https://example.invalid/v1
+          EMBEDDING_MODEL: BAAI/bge-m3
+          CHAT_MODEL: ci-only-model
+          RATE_LIMIT_ENABLED: "false"
+          DEBUG: "true"
+          # 测试里如果还报缺别的变量，往这里补即可
 
-      - name: Create pgvector extension
-        # service container 不跑 init.sql，手动建扩展
-        run: |
-          docker exec ${{ job.services.postgres.id }} \
-            psql -U smartdocs -d smartdocs_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-      - name: Run tests
-        run: uv run pytest -v --junitxml=test-results.xml
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: test-results.xml
-
-  # ===== build + push ECR（仅 main 分支） =====
+  # ==================== 2. 构建 + 推送镜像 ====================
   build:
-    name: Build & Push
+    name: 构建推送镜像
+    needs: test
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: test  # test 不过不构建
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
     permissions:
-      # OIDC 无密钥认证推 ECR 必需
-      id-token: write
       contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      image: ${{ steps.meta.outputs.image }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug OIDC claims
-        uses: actions/github-script@v7
+      # Docker 镜像名必须全小写，而 GitHub 用户名可能是 XHHZYQ 这种带大写的
+      - name: 计算镜像名与 tag
+        id: meta
+        run: |
+          echo "tag=sha-$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          echo "image=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
         with:
-          script: |
-            const token = await core.getIDToken('sts.amazonaws.com');
-            const payload = JSON.parse(
-              Buffer.from(token.split('.')[1], 'base64url').toString()
-            );
-            console.log(JSON.stringify({
-              iss: payload.iss,
-              aud: payload.aud,
-              sub: payload.sub,
-              repository: payload.repository,
-              repository_id: payload.repository_id,
-              repository_owner: payload.repository_owner,
-              repository_owner_id: payload.repository_owner_id,
-              ref: payload.ref
-            }, null, 2));
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Login to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & Push image
-        uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
           platforms: linux/amd64
           push: true
-          # tag 用 commit short sha，方便回溯
           tags: |
-            ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPO }}:latest
-            ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPO }}:${{ github.sha }}
-          # 缓存到 GHA，加速下次构建
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ===== 触发部署（CD 由 EC2 上 pull 完成） =====
-  # 单独 job：build 成功才触发，避免推送失败镜像
+  # ==================== 3. 部署到 EC2 ====================
   deploy:
-    name: Trigger Deploy
-    runs-on: ubuntu-latest
+    name: 部署到 EC2
     needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    # 不需要额外权限，用 repository_dispatch 或 workflow_dispatch 都太重
-    # 实际部署用 SSH 直连 EC2 执行 deploy.sh（见步骤 6）
+    runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Trigger EC2 deploy via SSH
-        # 用 appleboy/ssh-action 在 EC2 上执行 pull+restart
-        uses: appleboy/ssh-action@v1
+      # 引号包裹的 heredoc 定界符：不做变量替换，避免 .env 里的 $ 被 shell 吃掉
+      - name: 生成 .env
+        run: |
+          cat > .env <<'SMARTDOCS_EOF'
+          ${{ secrets.ENV_PROD }}
+          SMARTDOCS_EOF
+
+      # 部署所需文件全部推过去，EC2 上不需要 clone 代码、不需要手工放配置
+      - name: 上传部署文件
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: ".env,docker-compose.prod.yml,scripts/deploy.sh,docker/nginx/nginx.conf,docker/postgres/init.sql"
+          target: /opt/smartdocs
+
+      - name: 执行部署脚本
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             cd /opt/smartdocs
-            export ECR_REGISTRY="${{ vars.ECR_REGISTRY }}"
-            export ECR_REPO="smartdocs-ai"
-            export IMAGE_TAG="${{ github.sha }}"
-            export AWS_REGION="${{ vars.AWS_REGION }}"
-            bash ./scripts/deploy.sh
+            chmod +x scripts/deploy.sh
+
+            # 镜像设为 public 时这段不会执行；私有镜像配 GHCR_PAT 才需要
+            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+              echo '${{ secrets.GHCR_PAT }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+            fi
+
+            IMAGE_TAG='${{ needs.build.outputs.tag }}' \
+            IMAGE_NAME='${{ env.REGISTRY }}/${{ needs.build.outputs.image }}' \
+              bash scripts/deploy.sh
+
+      - name: 部署结果
+        if: always()
+        run: |
+          echo "镜像: ${{ env.REGISTRY }}/${{ needs.build.outputs.image }}:${{ needs.build.outputs.tag }}"
+          echo "地址: http://${{ secrets.EC2_HOST }}"

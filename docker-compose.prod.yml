@@ -1,45 +1,146 @@
-# 生产 EC2 override：覆盖 docker-compose.yml 的本地构建配置
-# 用法：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# 生产栈（EC2）—— 完全独立的一份文件，不与 docker-compose.yml 叠加
 #
-# 关键差异：
-# - image: 从 ECR 拉，不 build
-# - 端口：API 不暴露给宿主（只 nginx 80 暴露）
-# - restart: always（生产环境任何崩溃都要自恢复）
+# 用法（CI 自动执行，一般不用手动）：
+#   export IMAGE_TAG=sha-abc1234
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml run --rm migrate
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# 与本地文件的差异：
+#   - api/worker 从 GHCR 拉现成镜像，不在服务器上构建
+#   - 数据库和 redis 也跑容器（单机全栈），但端口不暴露到宿主
+#   - 多一个 migrate 一次性服务，负责 alembic upgrade head
+#   - restart: always + 日志大小上限，防止跑满磁盘
+
+name: smartdocs-prod
 
 services:
-  api:
-    image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG:-latest}
-    restart: always
-    ports: []
-    build: !reset null
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      ARQ_REDIS_URL: ${ARQ_REDIS_URL}
-    depends_on: !reset null
-
-  worker:
-    image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG:-latest}
-    restart: always
-    build: !reset null
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      ARQ_REDIS_URL: ${ARQ_REDIS_URL}
-    depends_on: !reset null
-
-  nginx:
-    restart: always
-    ports:
-      - "80:80"
-      # 未来加 SSL 证书后开 443
-      # - "443:443"
-
   postgres:
-    # 生产用 RDS，本地不跑 postgres
-    # 这里 override 成 scale=0 或直接不启动，compose 用 profile 控制
-    profiles: ["local-only"]  # prod 部署不会启动
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    # 故意不映射端口：数据库只对内网 compose 网络可见
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - smartdocs
 
   redis:
-    # 生产用 ElastiCache，本地不跑 redis
-    profiles: ["local-only"]
+    image: redis:7-alpine
+    restart: always
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    logging: *default-logging
+    networks:
+      - smartdocs
+
+  # 一次性迁移任务：跑完就退出，不常驻
+  # 由 deploy.sh 显式调用，restart: "no" 保证它不会被自动拉起
+  migrate:
+    image: ${IMAGE_NAME:-ghcr.io/xhhzyq/smartdocs-ai}:${IMAGE_TAG:-latest}
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # 迁移脚本会 import app 的模块，Redis 地址也得是容器内的
+      REDIS_URL: redis://redis:6379/0
+      ARQ_REDIS_URL: redis://redis:6379/1
+      UPLOAD_DIR: /app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - smartdocs
+
+  api:
+    image: ${IMAGE_NAME:-ghcr.io/xhhzyq/smartdocs-ai}:${IMAGE_TAG:-latest}
+    restart: always
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      ARQ_REDIS_URL: redis://redis:6379/1
+      UPLOAD_DIR: /app/data/uploads
+    volumes:
+      - uploads:/app/data/uploads
+      - logs:/app/logs
+    # 不暴露 8000：外部流量只能从 nginx 进
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - smartdocs
+
+  worker:
+    image: ${IMAGE_NAME:-ghcr.io/xhhzyq/smartdocs-ai}:${IMAGE_TAG:-latest}
+    restart: always
+    command: ["arq", "app.tasks.worker.WorkerSettings"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      ARQ_REDIS_URL: redis://redis:6379/1
+      UPLOAD_DIR: /app/data/uploads
+    volumes:
+      - uploads:/app/data/uploads
+      - logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - smartdocs
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    logging: *default-logging
+    networks:
+      - smartdocs
+
+networks:
+  smartdocs:
+    driver: bridge
+
+volumes:
+  pgdata:
+  uploads:
+  logs:
