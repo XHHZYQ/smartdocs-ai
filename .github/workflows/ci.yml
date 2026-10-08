@@ -194,4 +194,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /opt/smartdocs
-            bash ./scripts/deploy.sh  # 用 bash 解释器显式调用，确保脚本执行权限
+            export ECR_REGISTRY="${{ vars.ECR_REGISTRY }}"
+            export ECR_REPO="smartdocs-ai"
+            export IMAGE_TAG="${{ github.sha }}"
+            export AWS_REGION="${{ vars.AWS_REGION }}"
+            bash ./scripts/deploy.sh
