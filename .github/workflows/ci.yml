@@ -194,4 +194,4 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /opt/smartdocs
-            ./scripts/deploy.sh
+            bash ./scripts/deploy.sh  # 用 bash 解释器显式调用，确保脚本执行权限
