@@ -6,7 +6,10 @@ export DEBIAN_FRONTEND=noninteractive
 APP_DIR="/opt/smartdocs"
 REPO_URL="${REPO_URL:-https://github.com/XHHZYQ/smartdocs-ai.git}"
 ECR_REGISTRY="${ECR_REGISTRY:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_REGION="${AWS_REGION:-ap-southeast-1}"
+
+# 允许覆盖安全组的 CIDR。默认全网；生产环境建议收窄到办公网 IP。
+SG_CIDR="${SG_CIDR:-0.0.0.0/0}"
 
 # 1) Install dependencies
 apt-get update
@@ -54,6 +57,43 @@ EOF
 
 chown ubuntu:ubuntu "$APP_DIR/.env.prod"
 chmod 600 "$APP_DIR/.env.prod"
+
+# 7b) Open port 80 in the security group
+#
+# Why here and not in docker-compose: the security group lives in the AWS VPC
+# control plane and must allow inbound 80 BEFORE the instance serves traffic.
+# docker compose cannot do this at all -- it has no ability to call AWS APIs,
+# and by the time compose runs the traffic is already being dropped.
+#
+# Requires an IAM instance profile with ec2:AuthorizeSecurityGroupIngress on
+# this instance's security group. Without it we fall back to a clear manual
+# notice rather than failing the whole bootstrap.
+if SG_ID=$(aws ec2 describe-instances --region "$AWS_REGION" \
+      --instance-id "$(curl -fsS -m 5 -X PUT http://169.254.169.254/latest/api/token \
+        -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' \
+        | { read -r t; curl -fsS -m 5 -H "X-aws-ec2-metadata-token: $t" \
+            http://169.254.169.254/latest/meta-data/instance-id; } 2>/dev/null)" \
+      --query 'Reservations[0].Instances[0].SecurityGroups[0].GroupId' --output text 2>/dev/null) \
+   && [ -n "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
+  echo "==> Opening port 80 in security group $SG_ID (CIDR: $SG_CIDR)"
+  if aws ec2 authorize-security-group-ingress --region "$AWS_REGION" --group-id "$SG_ID" \
+      --ip-permissions "IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges=[{CidrIp=$SG_CIDR,Description=\"HTTP for SmartDocs web\"}]" 2>/dev/null; then
+    echo "==> Port 80 opened"
+  else
+    # Already-authorized returns a duplicate error; that is not a failure
+    echo "==> Port 80 rule already exists or could not be added (check manually)"
+  fi
+else
+  cat <<'NOTICE'
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │ ACTION REQUIRED: port 80 is not open yet.                   │
+  │ Public traffic will be dropped until you open it:           │
+  │   EC2 console → Security Groups → inbound rule → TCP 80     │
+  │   or: aws ec2 authorize-security-group-ingress ...          │
+  └──────────────────────────────────────────────────────────────┘
+NOTICE
+fi
 
 # 8) Initial startup
 sudo -u ubuntu bash -lc "

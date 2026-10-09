@@ -144,10 +144,41 @@ ssh ubuntu@<EC2_IP> -t 'cd /opt/smartdocs && IMAGE_TAG=sha-xxxxxxx bash scripts/
 大概率是 api 容器根本没起来，先看 `docker compose ps` 和 `logs api`。
 常见原因：`.env` 缺 `JWT_SECRET_KEY` 导致启动时校验失败；或者数据库迁移失败（`migrate` 服务的退出码非 0）。
 
+**容器内正常，但公网访问不了（连接超时 / ERR_EMPTY_RESPONSE）**
+
+这是最常见的一类问题，且**不是应用故障**。按顺序排查：
+
+1. **安全组没开放 80 端口**（占绝大多数情况）。安全组在 AWS VPC 控制面，
+   docker compose 无法修改它，只能在 EC2 控制台或用 aws CLI 加入站规则。
+   实测特征：外部节点访问 80 超时，但 22 正常。
+2. 看部署日志里的 `[FAIL] 公网 ... 不可达` 提示——`deploy.sh` 和 compose 的
+   `post_start` 钩子都会自动做公网探测，这行提示就是安全组没开。
+
+**注意两个 AWS 限制**（都会让本地自测得出错误结论）：
+
+- EC2 **不能 curl 自己的公网 IP**（不支持 hairpin NAT），所以在服务器上
+  `curl http://<公网IP>/health` 永远超时，跟服务状态无关。
+- 你的开发机若跑在 TUN 代理下（源地址显示 `198.18.0.0`），`nc`/`curl` 打印的
+  "Connected" 是代理伪造的，连 `1.1.1.1:9999` 都"通"。**不要用本地探测判断**，
+  用浏览器实际访问，或用第三方节点（如 check-host.net）从外部验证。
+
+**`deploy.sh` 为什么查公网要用第三方节点**
+
+`deploy.sh` 的健康检查打的是 `localhost`（内网），公网断掉时它照样返回 200，
+会出现"部署成功但用户访问不了"。因为上面那条 hairpin 限制，服务器自己测不了
+公网，只能借外部节点探测——这也是 `verify_public_reachable` 的作用。
+
+**换机器部署**
+
+`scripts/ec2-user-data.sh` 已内置开放 80 端口的逻辑，但**前提是实例挂了带
+`ec2:AuthorizeSecurityGroupIngress` 权限的 IAM 实例角色**。没有实例角色时脚本
+不会失败，而是打印 `ACTION REQUIRED` 提示，需要手动开通。
+建议收窄来源而非全网开放：给 user-data 传 `SG_CIDR=203.0.113.0/24` 之类。
+
 **想加 HTTPS**
 
-在 EC2 上跑个 certbot 拿证书，然后给 nginx 挂 443 server 块，compose 里加 `"443:443"` 端口映射。
-这一步建议等 HTTP 版本跑稳了再动。
+在 EC2 上跑 certbot 拿证书，给 nginx 加 443 server 块，compose 里加 `"443:443"` 端口映射，
+**并且安全组也要开放 443**。目前项目没配证书，compose 里也没有 443 映射。
 
 **t2.micro 跑不动**
 
