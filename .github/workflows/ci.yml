@@ -50,6 +50,12 @@ jobs:
       - name: 安装依赖
         run: uv sync --frozen
 
+      - name: 创建测试数据库
+        run: |
+          psql -h localhost -U smartdocs -d smartdocsdb -c "CREATE DATABASE smartdocs_test;"
+        env:
+          PGPASSWORD: smartdocs
+
       - name: pytest
         run: uv run pytest -q
         env:
