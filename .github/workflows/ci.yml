@@ -23,7 +23,7 @@ jobs:
 
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: smartdocs
           POSTGRES_PASSWORD: smartdocs
@@ -53,6 +53,7 @@ jobs:
       - name: 创建测试数据库
         run: |
           psql -h localhost -U smartdocs -d smartdocsdb -c "CREATE DATABASE smartdocs_test;"
+          psql -h localhost -U smartdocs -d smartdocs_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
         env:
           PGPASSWORD: smartdocs
 

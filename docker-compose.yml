@@ -15,7 +15,7 @@ name: smartdocs
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg17
     container_name: smartdocs-postgres
     restart: unless-stopped
     environment:

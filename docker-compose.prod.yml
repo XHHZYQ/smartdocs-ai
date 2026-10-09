@@ -16,7 +16,7 @@ name: smartdocs-prod
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg17
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
