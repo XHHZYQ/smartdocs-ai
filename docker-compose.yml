@@ -102,6 +102,8 @@ services:
     volumes:
       - uploads:/app/data/uploads
       - logs:/app/logs
+    healthcheck:
+      disable: true
     depends_on:
       postgres:
         condition: service_healthy
