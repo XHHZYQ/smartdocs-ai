@@ -24,9 +24,9 @@ logs/
 
 # 本地 env 文件（敏感，不进镜像；生产 env 用 compose env_file 或 EC2 上独立放）
 .env
+.env.local
+.env.example
 .env.test
-.env.docker
-.env.prod
 
 # 文档/笔记
 *.md

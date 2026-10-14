@@ -27,7 +27,8 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       # 宿主端口放 .env 里改，避免和本机已装的 postgres 撞车
-      - "${POSTGRES_PORT:-5432}:5432"
+      # 容器内始终是 5432，这个映射只影响宿主机
+      - "${POSTGRES_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smartdocs} -d ${POSTGRES_DB:-smartdocsdb}"]
       interval: 5s
@@ -65,6 +66,8 @@ services:
     env_file:
       - .env
     environment:
+      # docker -> app 不读 env 文件，只认下面这些注入的变量
+      APP_ENV: docker
       # 容器间用服务名通信，localhost 在容器里指的是自己
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-smartdocs}:${POSTGRES_PASSWORD:-smartdocs}@postgres:5432/${POSTGRES_DB:-smartdocsdb}
       REDIS_URL: redis://redis:6379/0
@@ -95,6 +98,7 @@ services:
     env_file:
       - .env
     environment:
+      APP_ENV: docker
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-smartdocs}:${POSTGRES_PASSWORD:-smartdocs}@postgres:5432/${POSTGRES_DB:-smartdocsdb}
       REDIS_URL: redis://redis:6379/0
       ARQ_REDIS_URL: redis://redis:6379/1
