@@ -50,9 +50,20 @@ jobs:
       - name: 安装依赖
         run: uv sync --frozen
 
-      - name: 创建测试数据库
+      - name: 创建测试数据库和 pgvector 扩展
         run: |
-          psql -h localhost -U smartdocs -d smartdocsdb -c "CREATE DATABASE smartdocs_test;"
+          # wait for postgres service to be ready (extra safety)
+          until pg_isready -h localhost -U smartdocs -d smartdocsdb; do
+            echo "waiting for postgres..."
+            sleep 1
+          done
+
+          # create test db only if it doesn't exist
+          psql -h localhost -U smartdocs -d smartdocsdb -tc "SELECT 1 FROM pg_database WHERE datname='smartdocs_test';" | grep -q 1 || \
+            psql -h localhost -U smartdocs -d smartdocsdb -c "CREATE DATABASE smartdocs_test;"
+
+          # ensure the vector extension exists in both databases
+          psql -h localhost -U smartdocs -d smartdocsdb -c "CREATE EXTENSION IF NOT EXISTS vector;"
           psql -h localhost -U smartdocs -d smartdocs_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
         env:
           PGPASSWORD: smartdocs
@@ -60,7 +71,7 @@ jobs:
       - name: pytest
         run: uv run pytest -q
         env:
-          DATABASE_URL: postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocsdb
+          DATABASE_URL: postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocs_test
           REDIS_URL: redis://localhost:6379/0
           ARQ_REDIS_URL: redis://localhost:6379/1
           JWT_SECRET_KEY: 5d71e2ef8005d55e3277359c96786c3a7e2e53cc9f6476807e5f19723266dcc8
