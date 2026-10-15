@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, DateTime, ForeignKey, Integer
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer
 from sqlmodel import Field, SQLModel
 
 from app.core.config import settings
@@ -29,4 +29,17 @@ class Chunk(SQLModel, table=True):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+    # 向量检索 ORDER BY embedding <=> ?（cosine 距离）的 ANN 索引。
+    # postgresql_ops 必须与查询算子匹配（cosine <=> → vector_cosine_ops），
+    # 否则优化器不会使用这个索引。HNSW 相比 IVFFlat 无需训练、召回率更高，
+    # 适合数据量持续增长的多租户场景。
+    __table_args__ = (
+        Index(
+            "ix_chunk_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
     )
